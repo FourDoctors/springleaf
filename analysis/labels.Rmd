@@ -115,8 +115,6 @@ predictors_chr <- predictors[predictor_types == 'character']
 predictors_num <- predictors[predictor_types == 'integer' |
                                  predictor_types == 'numeric']
 
-print(paste("number of character variables is ",
-            length(predictors_chr)))
 print(paste("number of numeric variables (including integer) is ",
             length(predictors_num)))
 
@@ -416,3 +414,4 @@ We can write the resulting data-sets
 write.csv(train, file=paste(datapath, "train_labeled.csv", sep=""))
 write.csv(test, file=paste(datapath, "test_labeled.csv", sep=""))
 ```
+
