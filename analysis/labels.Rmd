@@ -90,17 +90,7 @@ predictors_chr <- predictors[predictor_types == 'character']
 predictors_num <- predictors[predictor_types == 'integer' | predictor_types == 'numeric']
 ```
 
-We will want to do a PCA analysis on the variables, which makes sense
-only for the numeric data. We define a dataframe that contains only
-the numeric predictor data,
-
-```{r numdata}
-train_num <- train[, predictors_num]
-train_chr <- train[, predictors_chr]
-test_num <- test[, predictors_num]
-test_chr <- test[, predictors_chr]
-```
-We will proceed with PCA later. For now we should look into the
+ For now we should look into the
 _character_ data to see what those strings  might be! These variables
 could be logical, categorical, or dates. We will deal with these
 individually.  First lets look at the number of distinct values in these
@@ -363,3 +353,4 @@ We can write the resulting data-sets
 write.csv(train, file=paste(datapath, "train_labeled.csv", sep=""))
 write.csv(test, file=paste(datapath, "test_labeled.csv", sep=""))
 ```
+
