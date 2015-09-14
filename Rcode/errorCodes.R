@@ -1,4 +1,4 @@
-```{r setup, include=FALSE}
+## ----setup, include=FALSE------------------------------------------------
 knitr::opts_chunk$set(cache=FALSE)
 knitr::opts_chunk$set(echo=FALSE)
 knitr::opts_chunk$set(include=TRUE)
@@ -10,62 +10,37 @@ datapath <- paste(prjpath, "data/", sep="")
 analpath <- paste(prjpath, "analyses/", sep="")
 rcodepath <- paste(analpath, "Rcode/", sep="")
 setwd(analpath)
-```
-```{r loadLibsAndSource, include=FALSE}
+
+## ----loadLibsAndSource, include=FALSE------------------------------------
 reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
               "ggmap",	"plyr", "corrplot", "lubridate",
               "Hmisc", "corrplot", "rgdal", "sp")
 lapply(reqdpkgs, library, character.only=TRUE)
-```
 
-#Introduction
-
-We have labelled the data in _label.Rmd_, which will be used
-here. Our focus will be on numerical data, for which we have noticed
-values which look as if they are some kind of error codes. Our goal is
-to identify them using some heuristics, and replace them by NAs.
-
-```{r dataload}
+## ----dataload------------------------------------------------------------
 train <- read.csv(paste(datapath, 'train_labeled.csv', sep=""),
                   stringsAsFactor=FALSE)
 test <- read.csv(paste(datapath, 'test_labeled.csv', sep=""),
                  stringsAsFactor=FALSE)
-```
-We have already dropped two columns before we saved the labeled data,
-so the number of columns that we have read in is 1932, not 1934.
 
-# Types of the columns
-
-```{r datatypes}
+## ----datatypes-----------------------------------------------------------
 V <- ncol(train)
 predictors <- names(train)[-V]
 predictor_types <- sapply(predictors, function(p) class(train[, p]))
 print("Data types in the data frame train")
 print(table(predictor_types))
-```
-We will separate the columns by their data-type,
 
-```{r colByDataType}
+## ----colByDataType-------------------------------------------------------
 predictors_chr <- predictors[predictor_types == 'character']
 predictors_num <- predictors[predictor_types == 'integer' | predictor_types == 'numeric']
-```
 
-
-We will want to do a PCA analysis on the variables, which makes sense
-only for the numeric data. We define a dataframe that contains only
-the numeric predictor data,
-
-```{r numdata}
+## ----numdata-------------------------------------------------------------
 train_num <- train[, predictors_num]
 train_chr <- train[, predictors_chr]
 test_num <- test[, predictors_num]
 test_chr <- test[, predictors_chr]
-```
-We will proceed with PCA later.
 
-# Whats in the numeric variables?
-
-```{r numvals}
+## ----numvals-------------------------------------------------------------
 
 num_vals_num_vars <- data.frame(list(
     label = as.character(predictors_num),
@@ -76,11 +51,8 @@ num_vals_num_vars <- data.frame(list(
 )
 
 histogram(~ log10(num_vals), data=num_vals_num_vars)
-```
-## Numeric variables that have only 1 unique value!
-One of the variables has only one distinct value. Which one?
 
-```{r singlevalvar}
+## ----singlevalvar--------------------------------------------------------
 print(num_vals_num_vars[num_vals_num_vars$num_vals == 1,])
 
 print("the only value for numeric_792")
@@ -92,14 +64,8 @@ print(unique(train$numeric_1373))
 predictors_num_dropped <- with(num_vals_num_vars, label[num_vals == 1])
 
 print(num_vals_num_vars[num_vals_num_vars$num_vals == 2,])
-```
 
-## Distinct values for numeric variables.
-
-We can create dataframes that lists the values  for the variables that
-assume a few distinct values,
-
-```{r assumedvalsfew}
+## ----assumedvalsfew------------------------------------------------------
 predictor.values.counts <- function(p, data=train){
     vals <- sort(unique(train[, p]), na.last=TRUE)
     tab <- data.frame(table(train[, p], useNA='ifany'))
@@ -161,21 +127,12 @@ predictor.entropies <- function(vars, data=train, useNA='no') {
     df
 }
 
-```
 
-First we look at the entropy and the effective number of values for
-each variable.
-
-```{r varenteffval}
+## ----varenteffval--------------------------------------------------------
 
 var.entropies <- predictor.entropies(num_vals_num_vars$label)
-```
-To see what we can do by investigating the distribution of values
-assumed by a variable, we begin with  variables that take 3 distinct
-values,
 
-#### Three distinct valued numeric variables
-```{r threedistinctnum1}
+## ----threedistinctnum1---------------------------------------------------
 three.vals <- predictor.values(
     with(num_vals_num_vars, label[num_vals==3]), 3
     )
@@ -185,50 +142,18 @@ three.vals.counts <- do.call(rbind,
                                     predictor.values.counts)
                              )
 print(three.vals.counts)
-```
 
-We can see that 27 of the 30 seemingly three valued variable are
-really 2 valued. The third value is NA.
-
-
-```{r threedistinctnum}
+## ----threedistinctnum----------------------------------------------------
 var.3val.cor <- cor(train[, with(var.entropies, variable[distinct_vals==3])], use='pairwise.complete.obs')
 var.3val.cor[is.na(var.3val.cor)] <- 0
 corrplot(var.3val.cor, method='color')
-```
 
-```{r fourdistinctnum2}
+## ----fourdistinctnum2----------------------------------------------------
 var.4val.cor <- cor(train[, with(var.entropies, variable[distinct_vals==4])], use='pairwise.complete.obs')
 var.4val.cor[is.na(var.4val.cor)] <- 0
 corrplot(var.4val.cor, method='color', tl.cex=0.5)
-```
 
-**A STRATEGY**
-
-
-The correlation plot above shows us the way forward towards a
-strategy. With about 2000 predictors, we will have to prune them. We
-could use a sophisticated approach such as PCA, or partial least
-squares. Or simply eyeball the correlation plots and choose one of the
-highly correlated variables ( there are automated approaches in R to this,
-which I will place in the appropriate section/file ).
-
-In an example (not shown) , we can see pairs of
-variables that are perfectly correlated (almost black boxes off the
-diagonal). In fact, *numeric 1244, 1247, 1221, and 1220* seem to be
-perfectly correlated. And being 3-valued they should be categorical
-variables. We should expect a lot of such variables, even among
-genuine numeric variables.
-
-# Outlying values.
-
-A numerical column with 1000 distinct values will contain outlying
-values that look like 997 or 998. These could be codes for why the
-data is missing. If considered as numerical values, these will distort
-the distribution of that variable. We should consider declaring these
-variables NA. But how do we identify these values?
-
-```{r outlyingvalues}
+## ----outlyingvalues------------------------------------------------------
 outlying.values <- function(var, data=train, max.outliers = 4){
     uv <- unique(train[,var])
     uv <- sort(uv[!is.na(uv)])
@@ -251,25 +176,16 @@ outlying.values <- function(var, data=train, max.outliers = 4){
     }
  }
 
-```
 
-With this function we can collect the outlying values for each
-variable,
-```{r outlyingvaluesevaluate}
+## ----outlyingvaluesevaluate----------------------------------------------
 outlying.values.list <- lapply(num_vals_num_vars$label,
                                function(p) {
                                    print(paste("outliers for", p))
                                    outlying.values(p)
                                })
 names(outlying.values.list) <- num_vals_num_vars$label
-```
 
-### Setting outlying values to NA
-
-Now that we have possible error-codes for each of the numerical
-columns ( as the outliers), we can create a new dataframe that reports
-these error-codes as NAs,
-```{r markNAs}
+## ----markNAs-------------------------------------------------------------
 train.ecfixed <- train
 for(p in num_vals_num_vars$label) {
     ov <- outlying.values.list[[p]]
@@ -289,14 +205,8 @@ for(p in num_vals_num_vars$label) {
 }
 
 write.csv(test.ecfixed, file=paste(datapath, 'test_ecfixed.csv', sep=""))
-```
-# How full are the columns?
 
-Are there any columns without any NAs, and how many rows have all
-their columns filled? We will look at the data in the error-code fixed
-data,
-
-```{r numnas}
+## ----numnas--------------------------------------------------------------
 nacount.rows <- rowSums(is.na(train.ecfixed))
 nacount.cols <- data.frame(
     list(
@@ -310,21 +220,15 @@ nacount.cols <- data.frame(
 predictors_allfilled <- with(nacount.cols, variable[count == 0])
 predictors_num_allfilled <- intersect(predictors_allfilled, predictors_num)
 var.entropies$nacount <- nacount.cols$count[var.entropies$variable]
-```
 
-```{r nonacolcor}
+## ----nonacolcor----------------------------------------------------------
 nonacol.cor <- cor(train.ecfixed[, predictors_num_allfilled])
-```
 
-## Correlations between variables
-Some variables seem to contain the same information. For example
-*numeric_192* is exactly the same as *numeric_193*,
-```{r vars192and193}
+## ----vars192and193-------------------------------------------------------
 print("correlation between numeric_192 and numeric_193")
 print(with(train, cor(numeric_192, numeric_193, use="pairwise.complete.obs")))
-```
-We should use a map for keep track of which variables are identical!
-```{r identicalvars}
+
+## ----identicalvars-------------------------------------------------------
 identical_vars <- list()
 identical_vars$numeric_192 <- c('numeric_193')
-```
+
