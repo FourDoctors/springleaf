@@ -1,4 +1,5 @@
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(cache=FALSE)
 knitr::opts_chunk$set(echo=FALSE)
 knitr::opts_chunk$set(include=TRUE)
@@ -7,15 +8,21 @@ knitr::opts_chunk$set(fig.width=12)
 knitr::opts_chunk$set(fig.height=14)
 prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
 datapath <- paste(prjpath, "data/", sep="")
-analpath <- paste(prjpath, "analyses/", sep="")
+analpath <- paste(prjpath, "analysis/", sep="")
 rcodepath <- paste(analpath, "Rcode/", sep="")
 setwd(analpath)
+
 ```
+
+Some packages that we will use. Load other required passages at the
+top, so that the user can know which of these they need to install.
+
 ```{r loadLibsAndSource, include=FALSE}
+
 reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
-              "ggmap",	"plyr", "corrplot", "lubridate",
-              "Hmisc", "corrplot", "rgdal", "sp")
+              "plyr", "corrplot", "lubridate")
 lapply(reqdpkgs, library, character.only=TRUE)
+
 ```
 
 #Introduction
@@ -43,123 +50,154 @@ The data provided does not have any labels! Any analysis will be
 simpler if the variable names were somewhat descriptive. We will label
 the variables by their types that we can infer.
 
-Lets load the data,
+First we load the data,
 
 ```{r dataload}
+
 train <- read.csv(paste(datapath, 'train.csv', sep=""), stringsAsFactor=FALSE)
 test <- read.csv(paste(datapath, 'test.csv', sep=""), stringsAsFactor=FALSE)
+
 ```
 We should differentiate between the predictors and the outcome. This
 is unnecessary in general, but useful in the case of this data.
 ```{r predout}
-predictors <- names(train[1:1933])
+
+predictors <- names(train)[1:1933]
 outcome <- names(train)[1934]
+
 ```
 Before anything, we want to see if there are any columns without any values in them.
 
 ```{r allmissingcolumns}
+
 N <- nrow(train)
 all_missing <- sapply(predictors, function(p) sum(is.na(train[, p])) == N)
+print(paste("Number of columns with missing data: ", sum(all_missing)))
 predictors <- predictors[!all_missing]
 train <- train[!all_missing]
 test <- test[!all_missing]
+
 ```
 
+#Datatypes
+
 Notice that _predictors_ is a list of the names of the columns in the
-data, and not the columns itself.
+data, and not the columns thenselves.
 
 To determine the types of the variables, we will first look at all the
 variables that were read by R as factors,
 ```{r factorvars}
+
 trstr <- capture.output(str(train, list.len=2000))
 facvars <-  grepl(x=trstr, pattern='chr')
+
 ```
-The structure of the data in train returned by _str_ above is strings,
-however we can use the function _class_ to obtain the type of each
+The function _str_ returns strings describing the stucture of the data
+passed to it. In its normal use, _str_ is used to print to the
+screen. Above we have captured its output into a variable _trstr_
+instead of printing it to the screen. While we can explore the
+structure of the data by exploring the strings  in _trstr_ and
+_facvars_,  we can use the function _class_ to directly obtain the type of each
 column,
 
 ```{r datatypes}
+
 predictor_types <- sapply(predictors, function(p) class(train[, p]))
 print("Data types in the data frame train")
 print(table(predictor_types))
+
 ```
 We will separate the columns by their data-type,
 
 ```{r colByDataType}
+
 predictors_chr <- predictors[predictor_types == 'character']
-predictors_num <- predictors[predictor_types == 'integer' | predictor_types == 'numeric']
+predictors_num <- predictors[predictor_types == 'integer' |
+                                 predictor_types == 'numeric']
+
+print(paste("number of character variables is ",
+            length(predictors_chr)))
+print(paste("number of numeric variables (including integer) is ",
+            length(predictors_num)))
+
 ```
 
-We will want to do a PCA analysis on the variables, which makes sense
-only for the numeric data. We define a dataframe that contains only
-the numeric predictor data,
+#Character variables
 
-```{r numdata}
-train_num <- train[, predictors_num]
-train_chr <- train[, predictors_chr]
-test_num <- test[, predictors_num]
-test_chr <- test[, predictors_chr]
-```
-We will proceed with PCA later. For now we should look into the
-_character_ data to see what those strings  might be! These variables
+What might be the strings in the _character_ data be! These variables
 could be logical, categorical, or dates. We will deal with these
 individually.  First lets look at the number of distinct values in these
 variables,
 
 ```{r numdistinctchrvars}
+
 num_chr_var_vals <- data.frame(
     predictor=predictors_chr,
     num_vals = sapply(predictors_chr, function(p) length(unique(train[,p])))
 )
 print(num_chr_var_vals)
+
 ```
 
-For any predictor with 10 or less distinct values, we can obtain their values and look at them
+For any predictor with 10 or less distinct values, we can obtain their
+values and look at them
 
 ```{r predictorscategorical}
+
 maybe_cat <- sapply(
     predictors_chr,
     function(p) length(unique(train[,p])) < 11
 )
-
 categories_few <- lapply(
     predictors_chr[maybe_cat],
     function(p) unique(train[,p])
 )
 names(categories_few) <- predictors_chr[maybe_cat]
 print(categories_few)
+
 ```
 
 What are the variables that contain more than 10 unique values?
 ```{r manyvaluevars}
+
 categories_many <- lapply(
     predictors_chr[!maybe_cat],
     function(p) unique(train[,p])
 )
 names(categories_many) <- predictors_chr[!maybe_cat]
+
 ```
+
 Using the values in the _character_ variables we can hope to infer
 what they measure. Some of these are dates, and we can write a
-function to tell us if they are. To write this function we have
+function to tell us if indeed they are. To this end we have
 already peeked at the data to note that all date columns follow the
 same format.
 
 ```{r datavars}
-data_months <- c('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+
+is.date <- function(values){
+    data_months <- c('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
                  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
-is_date <- function(values){
     values <- values[values != '']
-    n_months <- sum(sapply(data_months, function(p) {
-                               sum(grepl(x=values,pattern=p)) }
-                    ))
-    n_months == length(values)
+    all(
+        sapply(values, function(v) {
+                   any(
+                       sapply(data_months, function(m) {
+                                  grepl(x=v, pattern=m)
+                              })
+                       )
+
+               })
+        )
 }
 
 maybe_date <- sapply(
     predictors_chr,
-    function(p) is_date(train[, p])
+    function(p) is.date(train[, p])
 )
 predictors_date <- predictors_chr[maybe_date]
+print(paste("number of date predictors", sum(maybe_date)))
 
 parsed_date <- function(ds) {
     # ignore the time in the timestamp
@@ -173,6 +211,7 @@ To be a logical variable, the value should be either _false_ or
 _true_, or an empty string if NA.
 
 ```{r varlogical}
+
 is_logical <- function(values){
     uv <- unique(values)
     length(uv) <= 3 &
@@ -187,12 +226,15 @@ maybe_logical <- sapply(
 
 predictors_logical <- predictors_chr[maybe_logical]
 
+print(paste("number of logical predictors", sum(maybe_logical)))
+
 ```
 What are the remaining _character_ variables. There are a few with
 many unique values. Lets look at the unique values of those that have
 10 or fewer unique values,
 
 ```{r varnotlognotdate}
+
 predictors_nld <- predictors_chr[ !maybe_logical & !maybe_date]
 uvs_nld <- lapply(predictors_nld, function(p) unique(train[, p]))
 names(uvs_nld) <- predictors_nld
@@ -201,10 +243,13 @@ num_val_nld <- data.frame(
     num_vals = sapply(predictors_nld, function(p) length(unique(train[, p])))
 )
 uvs_nld[ with(num_val_nld, predictor[num_vals < 11])]
-```
 
-We begin to make a dictionary that labels the variables.
+```
+## Relabeling the character variables.
+We can now begin to label make a dictionary that labels the variables.
+
 ```{r varlabels}
+
 varlabels <- list()
 n = 1
 for(p in predictors_logical) {
@@ -309,9 +354,12 @@ print(uvs_nld$VAR_1934)
 varlabels$VAR_1934 <- 'medium'
 train$VAR_1934 <- as.factor(train$VAR_1934)
 test$VAR_1934 <- as.factor(test$VAR_1934)
+
 ```
 Whats left?
+
 ```{r manyvalvars}
+
 print(num_val_nld[ num_val_nld$num_vals > 10,])
 
 print("some of the values for the variable VAR_0200")
@@ -341,8 +389,13 @@ varlabels$VAR_0404 <- 'job_first'
 print("some of the values for the variable VAR_0493")
 print(head(unique(train$VAR_0493), n=10))
 varlabels$VAR_0493 <- 'job_second'
+
 ```
+
+## Relabel the numeric variables
+
 We will relabel the numeric variables as well
+
 ```{r renamenum}
 
 numvarlabels <- as.list(paste("numeric", 1:(length(predictors_num)-1), sep="_"))
