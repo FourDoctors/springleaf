@@ -9,7 +9,8 @@ __pycache__/
 # R
 .RData
 .Rhistory
-
+.#*
+*#
 # Distribution / packaging
 .Python
 venv/
