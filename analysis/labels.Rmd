@@ -115,6 +115,7 @@ predictors_chr <- predictors[predictor_types == 'character']
 predictors_num <- predictors[predictor_types == 'integer' |
                                  predictor_types == 'numeric']
 
+<<<<<<< HEAD
 print(paste("number of numeric variables (including integer) is ",
             length(predictors_num)))
 
@@ -123,6 +124,9 @@ print(paste("number of numeric variables (including integer) is ",
 #Character variables
 
 What might be the strings in the _character_ data be! These variables
+=======
+ For now we should look into the
+_character_ data to see what those strings  might be! These variables
 could be logical, categorical, or dates. We will deal with these
 individually.  First lets look at the number of distinct values in these
 variables,

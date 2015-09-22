@@ -1,0 +1,96 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE)
+knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(include=TRUE)
+knitr::opts_chunk$set(results="asis")
+knitr::opts_chunk$set(fig.width=12)
+knitr::opts_chunk$set(fig.height=14)
+prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
+datapath <- paste(prjpath, "data/", sep="")
+analpath <- paste(prjpath, "analyses/", sep="")
+rcodepath <- paste(analpath, "Rcode/", sep="")
+setwd(analpath)
+```
+```{r loadLibsAndSource, include=FALSE}
+reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
+              "ggmap",	"plyr", "corrplot", "lubridate",
+              "Hmisc", "corrplot", "rgdal", "sp")
+lapply(reqdpkgs, library, character.only=TRUE)
+```
+## Simple models
+Before we begin to investigate what models should be appropriate, we
+need a baseline error to compare against. For the baseline, lets look
+at how many 1s there are in the target.
+```{r baseline}
+baseline <- mean(train$target)
+print( paste("Fraction of ones in the target", round(baseline,2)))
+```
+With only about 23% ones in the target, our default prediction of 0
+would lead to an error on only 0.23. Any model worth the effort should
+achieve an error larger than this value, hence the baseline of 0.23.
+
+```{r baseline2}
+print(paste("we have set a null model of target = 0 for any input"))
+print(paste("this null model has a baseline error of ", baseline))
+```
+
+Lets first consider the numeric  variables with two distinct values. Some of
+these are useless because the two values for these variables consist
+of an actual value and an NA. I am not sure what we can do with these
+values, but let us try making a logistic regression model anyway,
+
+```{r logisiticWith2ValVariables}
+
+vals2numericVars <- with(num_vals_num_vars, label[num_vals == 2])
+m.numeric2 <- glm(target ~ .,
+                  data = train[, c(vals2numericVars, 'target')],
+                  family='binomial'
+                  )
+tp.numeric2 <- predict(m.numeric2, newdata=train, type='response')
+err.numeric2 <- sum( (tp.numeric2 > 0.5) != train$target, na.rm=TRUE)/nrow(train)
+
+print("the logistic model with only numeric variables that take 2 values")
+print(paste("training error :  ", round(err.numeric2,2)))
+print(paste("compared to baseline: ", round(err.numeric2/baseline, 2)))
+```
+**No better than the null**
+
+
+```{r logisiticWith3ValVariables}
+
+vals3numericVars <- with(num_vals_num_vars, label[num_vals == 3])
+m.numeric3 <- glm(target ~ .,
+                  data = train.ecfixed[, c(vals3numericVars, 'target')],
+                  family='binomial'
+                  )
+tp.numeric3 <- predict(m.numeric3, newdata=train.ecfixed, type='response')
+err.numeric3 <- sum( (tp.numeric3 > 0.5) != train$target, na.rm=TRUE)/nrow(train)
+
+print("the logistic model with only numeric variables that take 3 values")
+print(paste("training error :  ", round(err.numeric3,2)))
+print(paste("compared to baseline: ", round(err.numeric3/baseline, 2)))
+```
+
+Lets automate this process,
+
+```{r logisticWithNvalsVars}
+for(n in 2:max(num_vals_num_vars$num_vals)){
+    predictors <- with(num_vals_num_vars, label[num_vals == n])
+    m <- glm(target ~ .,
+             data = train[, c(predictors, 'target')],
+             family='binomial'
+             )
+    tp <- predict(m, newdata=train, type='response')
+    err <- sum( (tp > 0.5) != train$target, na.rm=TRUE)/nrow(train)
+
+    print(paste("the logistic model with only numeric variables that take ", n, " values"))
+    print(paste("total number of variables considered", length(predictors)))
+    print(paste("training error :  ", round(err,2)))
+    print(paste("compared to baseline: ", round(err/baseline, 2)))
+    print("|||||||||||||||||||||||||||||||||||||||")
+}
+
+
+```{r cors1}
+cors1 <- cor(train[, num_vals_num_vars$label[127:136]], use="pairwise.complete.obs")
+```

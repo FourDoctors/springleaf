@@ -1,5 +1,4 @@
 ```{r setup, include=FALSE}
-
 knitr::opts_chunk$set(cache=FALSE)
 knitr::opts_chunk$set(echo=FALSE)
 knitr::opts_chunk$set(include=TRUE)
@@ -38,12 +37,14 @@ train <- read.csv(paste(datapath, 'train_labeled.csv', sep=""),
                   stringsAsFactor=FALSE)
 test <- read.csv(paste(datapath, 'test_labeled.csv', sep=""),
                  stringsAsFactor=FALSE)
+
 print(paste("number of columns in train", ncol(train)))
 print(paste("number of columns in test", ncol(test)))
 
 ```
 We have already dropped two columns before we saved the labeled data,
 so the number of columns that we have read in is 1932, not 1934.
+
 
 We will redo a few things like functions that we have already implemented in
 _label.Rmd_,  probably better.
@@ -68,6 +69,11 @@ elements of this list.
 
 ```{r datatypes}
 
+=======
+# Types of the columns
+
+```{r datatypes}
+
 V <- ncol(train)
 predictors <- names(train)[-V]
 predictor_types <- sapply(predictors, function(p) class(train[, p]))
@@ -84,6 +90,25 @@ predictors_num <- predictors[predictor_types == 'integer' |
                                  predictor_types == 'numeric']
 
 ```
+=======
+predictors_chr <- predictors[predictor_types == 'character']
+predictors_num <- predictors[predictor_types == 'integer' | predictor_types == 'numeric']
+```
+
+
+We will want to do a PCA analysis on the variables, which makes sense
+only for the numeric data. We define a dataframe that contains only
+the numeric predictor data,
+
+```{r numdata}
+train_num <- train[, predictors_num]
+train_chr <- train[, predictors_chr]
+test_num <- test[, predictors_num]
+test_chr <- test[, predictors_chr]
+```
+We will proceed with PCA later.
+
+
 # Whats in the numeric variables?
 
 ```{r numvals}
@@ -124,14 +149,37 @@ print(unique(train$numeric_792))
 print("the only value for numeric_1373")
 print(unique(train$numeric_1373))
 
+
+histogram(~ log10(num_vals), data=num_vals_num_vars)
+
+```
+## Numeric variables that have only 1 unique value!
+One of the variables has only one distinct value. Which one?
+
+```{r singlevalvar}
+
+print(num_vals_num_vars[num_vals_num_vars$num_vals == 1,])
+
+print("the only value for numeric_792")
+print(unique(train$numeric_792))
+
+print("the only value for numeric_1373")
+print(unique(train$numeric_1373))
+
+predictors_num_dropped <- with(num_vals_num_vars, label[num_vals == 1])
+
+print(num_vals_num_vars[num_vals_num_vars$num_vals == 2,])
+
 ```
 
 ## Distinct values for numeric variables.
 
+
 We will write functions to count the number of distinct values assumed
 by a variable.
 
-```{r predictordistinctvalcounts}
+
+```{r assumedvalsfew}
 
 predictor.values.counts <- function(p, data=train){
     vals <- sort(unique(train[, p]), na.last=TRUE)
@@ -167,7 +215,8 @@ predictor.entropies <- function(vars, data=train, useNA='no') {
         list(
             variable = vars,
             entropy = sapply(vars, function(p) {
-                                 tab <- as.numeric(table(train[,p]), useNA = useNA)
+                                 tab <- as.numeric(table(train[,p]),
+                                                   useNA = useNA)
                                  p <- tab/sum(tab)
                                  - sum(p * log2(p))
                              }),
@@ -204,6 +253,10 @@ each variable.
 
 var.entropies <- predictor.entropies(num_vals_num_vars$label)
 print(head(var.entropies))
+
+```
+
+=======
 ```
 
 To see what we can do by investigating the distribution of values
@@ -214,8 +267,9 @@ values,
 ```{r threedistinctnum1}
 
 three.vals <- predictor.values(
-    with(num_vals_num_vars, label[num_vals==3]), 3
+    with(numeric_val_counts[num_vals==3]), 3
     )
+
 three.vals.counts <- do.call(rbind,
                              lapply(three.vals$variable,
                                     predictor.values.counts)
@@ -226,6 +280,7 @@ print(three.vals.counts)
 
 We can see that 27 of the 30 seemingly three valued variable are
 really 2 valued. The third value is NA.
+
 
 We can also view the correlations between the variables that assume 3
 distinct values, to get an idea on trimming down on highly correlated
@@ -242,6 +297,23 @@ corrplot(var.3val.cor, method='color')
 
 And we can do the same thing for variables that assume four distinct
 values.
+
+```{r fourdistinctnum2}
+
+var.4val.cor <- cor(train[, with(var.entropies, variable[distinct_vals==4])],
+                    use='pairwise.complete.obs')
+var.4val.cor[is.na(var.4val.cor)] <- 0
+corrplot(var.4val.cor, method='color', tl.cex=0.5)
+
+=======
+
+```{r threedistinctnum}
+
+var.3val.cor <- cor(train[, with(var.entropies, variable[distinct_vals==3])],
+                    use='pairwise.complete.obs')
+var.3val.cor[is.na(var.3val.cor)] <- 0
+corrplot(var.3val.cor, method='color')
+```
 
 ```{r fourdistinctnum2}
 
@@ -324,7 +396,7 @@ these error-codes as NAs,
 ```{r markNAs}
 
 train.ecfixed <- train
-for(p in num_vals_num_vars$label) {
+for(p in numeric_val_counts$label) {
     ov <- outlying.values.list[[p]]
     x <- train[,p]
     x[x %in% ov] <- NA
@@ -334,7 +406,7 @@ for(p in num_vals_num_vars$label) {
 write.csv(train.ecfixed, file=paste(datapath, 'train_ecfixed.csv', sep=""))
 
 test.ecfixed <- test
-for(p in num_vals_num_vars$label) {
+for(p in numeric_val_counts$label) {
     ob <- outlying.values.list[[p]]
     x <- test[,p]
     x[x %in% ov] <- NA
@@ -375,6 +447,7 @@ nonacol.cor <- cor(train.ecfixed[, predictors_num_allfilled])
 
 ```
 
+
 ## Correlations between variables
 Some variables seem to contain the same information. For example
 *numeric_192* is exactly the same as *numeric_193*,
@@ -389,5 +462,8 @@ We should use a map for keep track of which variables are identical!
 
 identical_vars <- list()
 identical_vars$numeric_192 <- c('numeric_193')
+
+print("correlation between numeric_192 and numeric_193")
+print(with(train, cor(numeric_192, numeric_193, use="pairwise.complete.obs")))
 
 ```
