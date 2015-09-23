@@ -1,4 +1,5 @@
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(cache=FALSE)
 knitr::opts_chunk$set(echo=FALSE)
 knitr::opts_chunk$set(include=TRUE)
@@ -15,7 +16,6 @@ setwd(analpath)
 
 
 ```{r loadLibsAndSource, include=FALSE}
-
 
 reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
               "plyr",  "lubridate", "Hmisc", "corrplot")
@@ -45,9 +45,9 @@ We will use this list in this analysis.
 
 ```{r dataload}
 
-train <- read.csv(paste(datapath, 'train_ecfixed.csv', sep=""),
+train <- read.csv(paste(datapath, 'train_labeled.csv', sep=""),
                   stringsAsFactor=FALSE)
-test <- read.csv(paste(datapath, 'test_ecfixed.csv', sep=""),
+test <- read.csv(paste(datapath, 'test_labeled.csv', sep=""),
                  stringsAsFactor=FALSE)
 
 ```

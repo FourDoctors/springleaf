@@ -69,11 +69,6 @@ elements of this list.
 
 ```{r datatypes}
 
-=======
-# Types of the columns
-
-```{r datatypes}
-
 V <- ncol(train)
 predictors <- names(train)[-V]
 predictor_types <- sapply(predictors, function(p) class(train[, p]))
@@ -90,24 +85,6 @@ predictors_num <- predictors[predictor_types == 'integer' |
                                  predictor_types == 'numeric']
 
 ```
-=======
-predictors_chr <- predictors[predictor_types == 'character']
-predictors_num <- predictors[predictor_types == 'integer' | predictor_types == 'numeric']
-```
-
-
-We will want to do a PCA analysis on the variables, which makes sense
-only for the numeric data. We define a dataframe that contains only
-the numeric predictor data,
-
-```{r numdata}
-train_num <- train[, predictors_num]
-train_chr <- train[, predictors_chr]
-test_num <- test[, predictors_num]
-test_chr <- test[, predictors_chr]
-```
-We will proceed with PCA later.
-
 
 # Whats in the numeric variables?
 
@@ -131,7 +108,7 @@ One of the variables has only one distinct value. Which one?
 
 ```{r singlevalvar}
 
-print(num_vals_num_vars[num_vals_num_vars$num_vals == 1,])
+print(with(numeric_val_counts, label[num_vals == 1]))
 
 varsToRemove <- rbind(varsToRemove,
                       data.frame(
@@ -148,27 +125,6 @@ print("the only value for numeric_792")
 print(unique(train$numeric_792))
 print("the only value for numeric_1373")
 print(unique(train$numeric_1373))
-
-
-histogram(~ log10(num_vals), data=num_vals_num_vars)
-
-```
-## Numeric variables that have only 1 unique value!
-One of the variables has only one distinct value. Which one?
-
-```{r singlevalvar}
-
-print(num_vals_num_vars[num_vals_num_vars$num_vals == 1,])
-
-print("the only value for numeric_792")
-print(unique(train$numeric_792))
-
-print("the only value for numeric_1373")
-print(unique(train$numeric_1373))
-
-predictors_num_dropped <- with(num_vals_num_vars, label[num_vals == 1])
-
-print(num_vals_num_vars[num_vals_num_vars$num_vals == 2,])
 
 ```
 
@@ -251,12 +207,11 @@ each variable.
 
 ```{r varenteffval}
 
-var.entropies <- predictor.entropies(num_vals_num_vars$label)
+var.entropies <- predictor.entropies(numeric_val_counts$label)
 print(head(var.entropies))
 
-```
+save(var.entropies, file=paste(datapath, "var.entropies"))
 
-=======
 ```
 
 To see what we can do by investigating the distribution of values
@@ -267,7 +222,7 @@ values,
 ```{r threedistinctnum1}
 
 three.vals <- predictor.values(
-    with(numeric_val_counts[num_vals==3]), 3
+    with(numeric_val_counts, label[num_vals==3]), 3
     )
 
 three.vals.counts <- do.call(rbind,
@@ -305,23 +260,6 @@ var.4val.cor <- cor(train[, with(var.entropies, variable[distinct_vals==4])],
 var.4val.cor[is.na(var.4val.cor)] <- 0
 corrplot(var.4val.cor, method='color', tl.cex=0.5)
 
-=======
-
-```{r threedistinctnum}
-
-var.3val.cor <- cor(train[, with(var.entropies, variable[distinct_vals==3])],
-                    use='pairwise.complete.obs')
-var.3val.cor[is.na(var.3val.cor)] <- 0
-corrplot(var.3val.cor, method='color')
-```
-
-```{r fourdistinctnum2}
-
-var.4val.cor <- cor(train[, with(var.entropies, variable[distinct_vals==4])],
-                    use='pairwise.complete.obs')
-var.4val.cor[is.na(var.4val.cor)] <- 0
-corrplot(var.4val.cor, method='color', tl.cex=0.5)
-
 ```
 
 **A STRATEGY**
@@ -351,39 +289,72 @@ variables NA. But how do we identify these values?
 
 ```{r outlyingvalues}
 
-outlying.values <- function(var, data=train, max.outliers = 4){
-    uv <- unique(train[,var])
+outlying.values <- function(var, data=train, degree=2){
+    uv <- train[,var]
     uv <- sort(uv[!is.na(uv)])
-    uvneg <- uv[ uv < 0]
+    uvneg <- unique(uv[ uv < 0])
     if(length(uvneg) == 1) negovs <- uvneg
     else negovs <- c()
     uv <- uv[ uv >= 0]
-    if (length(uv) == 0) uvneg
+    luv <- log10(uv+1)
+    if (length(luv) == 0) uvneg
     else {
-        lmd <- log10(median(uv) + 1)
-        dep <- sapply(uv + 1, function(v) {
-                          if( v <= 0 ) NA
-                          else log10(v) - lmd
-                      })
-        lmx <- log10(max(uv) + 1)
-        max_dep <- ceiling(lmx) - ceiling(lmd)
-        ovs <- uv[dep >= ceiling(max_dep)]
-        if ((max_dep <= 0) | (length(ovs) > max.outliers)) negovs
-        else c(negovs, ovs)
+        ovs <- unique(uv[ luv - mean(luv) > degree * sd(luv)])
+        c(negovs, ovs)
     }
  }
 
 ```
 
-With this function we can collect the outlying values for each
-variable,
+```{r dpoutlyer}
+
+dpoutlyers <- function(xs, data=train, offset=5, rarity = 0.001) {
+    xs <- xs[!is.na(xs)]
+    xsneg <- xs[xs < 0]
+    xs <- xs[xs >= 0]
+    olneg <- if (length(unique(xsneg)) == 1) unique(xsneg) else c()
+    if(length(xs) == 0) return(olneg)
+    txs <- table(xs)
+    dps <- ceiling(log10(xs + offset))
+    tdps <- table(dps)
+    if(length(tdps) == 1) return(olneg)
+    n <- max(dps)
+    cdps <- rep(0, n)
+    cdps[as.numeric(names(tdps))] <- as.numeric(tdps)
+    if (length(cdps) <= 1) return(olneg)
+    if ( (cdps[n-1] == 0) | (cdps[n]/cdps[n-1] < rarity)) {
+        polps <- unique(xs[dps == n])
+        polps <- polps[polps > 10]
+        uxs <- unique(xs)
+        olpos <- polps[ polps > 2*max(setdiff(uxs, polps))]
+        c(olneg, olpos )
+    }
+    else {
+        olneg
+    }
+}
+
+```
+
+
+
+With these function we can collect the outlying values for each
+variable. We will use the dpoutlyer that uses the number of decimal
+points in the number) to find the outlyers,
 
 ```{r outlyingvaluesevaluate}
 
 outlying.values.list <- lapply(numeric_val_counts$label,
-                                   outlying.values
+                               function(var) {
+                                   print("outlyers for ")
+                                   print(var)
+                                   dpoutlyers(train[,var], rarity=0.001)
+                                   }
                                )
 names(outlying.values.list) <- numeric_val_counts$label
+
+print("number of numeric variables with identified error-codes")
+print(sum(sapply(outlying.values.list, function(xs) length(xs) > 0)))
 
 ```
 
@@ -394,6 +365,8 @@ columns ( as the outliers), we can create a new dataframe that reports
 these error-codes as NAs,
 
 ```{r markNAs}
+
+save(outlying.values.list, file=paste(datapath, "outlyingValuesList.Rdata"))
 
 train.ecfixed <- train
 for(p in numeric_val_counts$label) {
@@ -416,6 +389,14 @@ for(p in numeric_val_counts$label) {
 write.csv(test.ecfixed, file=paste(datapath, 'test_ecfixed.csv', sep=""))
 
 ```
+
+*NOTE ON THE IDENTIFIED ERROR-CODES*
+Most of the error-codes make sense, these are the largest 2 to 4 on a
+given decimal point scale, for example 98 and 99. In other cases there
+is a 165, or a list 32 40 23 24 30 22. These cases happen because they
+are at least twice as large as the largest of the bulk (non-outlier)
+value.
+
 # How full are the columns?
 
 Are there any columns without any NAs, and how many rows have all
