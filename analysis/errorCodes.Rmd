@@ -210,7 +210,7 @@ each variable.
 var.entropies <- predictor.entropies(numeric_val_counts$label)
 print(head(var.entropies))
 
-save(var.entropies, file=paste(datapath, "var.entropies"))
+save(var.entropies, file=paste(datapath, "varEntropies.Rdata", sep=""))
 
 ```
 
@@ -366,7 +366,7 @@ these error-codes as NAs,
 
 ```{r markNAs}
 
-save(outlying.values.list, file=paste(datapath, "outlyingValuesList.Rdata"))
+save(outlying.values.list, file=paste(datapath, "outlyingValuesList.Rdata", sep=""))
 
 train.ecfixed <- train
 for(p in numeric_val_counts$label) {
