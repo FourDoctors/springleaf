@@ -1,4 +1,5 @@
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(cache=FALSE)
 knitr::opts_chunk$set(echo=FALSE)
 knitr::opts_chunk$set(include=TRUE)
@@ -7,18 +8,17 @@ knitr::opts_chunk$set(fig.width=12)
 knitr::opts_chunk$set(fig.height=14)
 prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
 datapath <- paste(prjpath, "data/", sep="")
-analpath <- paste(prjpath, "analyses/", sep="")
+analpath <- paste(prjpath, "analysis/", sep="")
 rcodepath <- paste(analpath, "Rcode/", sep="")
 setwd(analpath)
+
 ```
 
 
 ```{r loadLibsAndSource, include=FALSE}
 
-
 reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
-              "ggmap",	"plyr",  "lubridate",
-              "Hmisc", "corrplot")
+              "plyr",  "lubridate", "Hmisc", "corrplot")
 lapply(reqdpkgs, library, character.only=TRUE)
 
 
@@ -26,34 +26,36 @@ lapply(reqdpkgs, library, character.only=TRUE)
 
 #Introduction
 
-
-We study the correlations between the variables, using the error-code
-fixed data. The values representing error codes in the numerical
-variables of the data are 1 to 2 orders of magnitude larger than the
-normal values in that variable. This makes sense if these large (or
-sometimes negative) values are to represent errors. However, their
-large values will skew any numerical study that does not notice them
-as error-codes. We have identified the error-codes and replaced them
-with NAs. In this analysis of the correlations we will use the
-error-code fixed data.
-
-
-
+We study the correlations between the variables. We can use the
+error-code fixed data, reading it directly fromt he saved csvs, or we
+can use the original data (labelled of course), and use a list of
+error-codes in each column when correlations are evaluated. Because we
+might have a use for the error-code values, (for example we might want
+to  create new variables ), we will follow the second plan. Values
+representing error codes in the numerical variables of the data are 1
+to 2 orders of magnitude larger than the normal values in that
+variable. This makes sense if these large (or sometimes negative)
+values are to represent errors. However, their large values will skew
+any numerical study that does not notice them as error-codes. We have
+identified the error-codes, and stored them in a list saved as Rdata.
+We will use this list in this analysis.
 
 ```{r dataload}
-train <- read.csv(paste(datapath, 'train_ecfixed.csv', sep=""),
+
+train <- read.csv(paste(datapath, 'train_labeled.csv', sep=""),
                   stringsAsFactor=FALSE)
-test <- read.csv(paste(datapath, 'test_ecfixed.csv', sep=""),
+test <- read.csv(paste(datapath, 'test_labeled.csv', sep=""),
                  stringsAsFactor=FALSE)
 
-N.original <- nrow(train)
 ```
+
 There are two variables, *numeric_204, numeric_476*, that do not have
 any data in the training set. We should remove this from our data,
 
 
 ```{r datatypes}
 
+N.original <- nrow(train)
 V <- ncol(train)
 predictors <- names(train)[-V]
 predictor_types <- sapply(predictors, function(p) class(train[, p]))
@@ -66,10 +68,13 @@ We will separate the columns by their data-type,
 ```{r colByDataType}
 
 predictors_chr <- predictors[predictor_types == 'character']
-predictors_num <- predictors[predictor_types == 'integer' | predictor_types == 'numeric']
+predictors_num <- predictors[predictor_types == 'integer' |
+                                 predictor_types == 'numeric']
 
 ```
+
 ```{r assumedvalsfew}
+
 predictor.values.counts <- function(p, data=train){
     vals <- sort(unique(train[, p]), na.last=TRUE)
     tab <- data.frame(table(train[, p], useNA='ifany'))
@@ -98,26 +103,30 @@ predictor.values <- function(vars, n, data=train) {
     df$num.eff.vars <- exp(df$entropy)
     df
 }
+
 predictor.entropies <- function(vars, data=train, useNA='no') {
     df <- data.frame(
-        variable = vars,
-        entropy = sapply(vars, function(p) {
-                             tab <- as.numeric(table(train[,p]), useNA = useNA)
-                             p <- tab/sum(tab)
-                             - sum(p * log2(p))
+        list(
+            variable = vars,
+            entropy = sapply(vars, function(p) {
+                                 tab <- as.numeric(table(train[,p]), useNA = useNA)
+                                 p <- tab/sum(tab)
+                                 - sum(p * log2(p))
+                             }),
+            median = sapply(vars, function(p) {
+                                median(train[,p], na.rm=TRUE)
+                            }),
+            max = sapply(vars, function(p) {
+                             max(train[,p], na.rm=TRUE)
                          }),
-        median = sapply(vars, function(p) {
-                            median(train[,p], na.rm=TRUE)
-                        }),
-        max = sapply(vars, function(p) {
-                         max(train[,p], na.rm=TRUE)
-                     }),
-        min = sapply(vars, function(p) {
-                         min(train[, p], na.rm=TRUE)
-                     }),
-        distinct_vals = sapply(vars, function(p) {
-                                  length(unique(train[,p], na.rm=TRUE))
-                              })
+            min = sapply(vars, function(p) {
+                             min(train[, p], na.rm=TRUE)
+                         }),
+            distinct_vals = sapply(vars, function(p) {
+                                       length(unique(train[,p], na.rm=TRUE))
+                                   })
+            ),
+        stringsAsFactor = FALSE
         )
 
     df$num_eff_vals <- 2**(df$entropy)
@@ -146,6 +155,12 @@ var.entropies$datatype <- predictor_types[var.entropies$variable]
   appropriate. Another thing to remember is that the numeric variables
   are both _integer_ and _numeric_ in _var.entropies$datatype_.
 
+<<<<<<< HEAD=======
+
+#Highly correlated variables.
+
+
+
 ## Columns with no data
 
 ```{r removeNoDataColumns}
@@ -157,7 +172,9 @@ train <- train[, !(names(train) %in% vars_nodata)]
 test <- test[, !(names(train) %in% vars_nodata)]
 print(paste("after removing columns without data", ncol(train)))
 
+```
 # Highly correlated variables.
+
 
 We should expect high correlations only between variables that live in
 the same phase space, so the highly correlated variabels should assume
@@ -167,6 +184,7 @@ vals. Since correlations are defined only for numerical variables, we
 will subset the variables accordingly.
 
 ```{r threevalcor}
+
 var.3val.cor <- cor(train[, with(var.entropies,
                                  variable[distinct_vals == 3 &
                                               (datatype == 'integer' |
@@ -179,9 +197,11 @@ var.3val.cor <- cor(train[, with(var.entropies,
                     )
 var.3val.cor[is.na(var.3val.cor)] <- 0
 corrplot(var.3val.cor, method='color', tl.cex=0.5)
+
 ```
 
-```{r threevalcor}
+```{r fourvalcor}
+
 var.4val.cor <- cor(train[, with(var.entropies,
                                  variable[distinct_vals == 4 &
                                               (datatype == 'integer' |
@@ -194,7 +214,11 @@ var.4val.cor <- cor(train[, with(var.entropies,
                     )
 var.4val.cor[is.na(var.4val.cor)] <- 0
 corrplot(var.4val.cor, method='color', tl.cex=0.5)
+
+```
+
 ```{r cortrulynumeric}
+
 var_truly_numeric <- with(var.entropies,
                           variable[datatype == 'numeric' &
                                        !is.na(datatype)])
@@ -206,7 +230,9 @@ numcors[is.na(numcors)] <- 0
 corrplot(numcors, order='AOE')
 
 ```
+
 ```{r allcors.nona}
+
 vars.num.nona <- with(var.entropies,
                       variable[(datatype == 'integer' |
                                     datatype == 'numeric') &
@@ -223,6 +249,7 @@ heatmap.2(allcors.nona, trace="none", col=greenred(10))
 
 
 ```{r allcors}
+
 vars.num <- with(var.entropies,
                  variable[(datatype == 'integer' |
                                datatype == 'numeric')
@@ -280,7 +307,6 @@ data in the column might be very small. We should store the number of
 not NA values for each variable along with their KL divergences.
 ```{r kldnumnas}
 
-
 kld_num_train_df <- data.frame(
     list(
         variable = predictors_num,
@@ -302,12 +328,26 @@ kld_num_train_df <- data.frame(
 
 kld_num_train_df <- kld_num_train_df[order(kld_num_train_df$distinct), ]
 
-
 ```
 The variable _distinct_ in *kld_num_train_df* also counts NA. We will
 create another variable in that data-frame that tells us if the
 variable contains NAs, and will then add entropies, min, max, etc from _var.entropies_.
 
+=======
+```
+The variable _distinct_ in *kld_num_train_df* also counts NA. We will
+create another variable in that data-frame that tells us if the
+variable contains NAs, and will then add entropies, min, max, etc from
+_var.entropies_.
+
+
+
+The variable _distinct_ in *kld_num_train_df* also counts NA. We will
+create another variable in that data-frame that tells us if the
+variable contains NAs, and will then add entropies, min, max, etc from _var.entropies_.
+
+
+>>>>>>> b7cb1da0a63d43dab85680fb2d46585a2a2da8ab
 ```{r kldhasna}
 
 kld_num_train_df$hasna <- sapply(kld_num_train_df$variable,
@@ -315,7 +355,8 @@ kld_num_train_df$hasna <- sapply(kld_num_train_df$variable,
 
 kld_num_train_df <- cbind(
     kld_num_train_df,
-    var.entropies[kld_num_train_df$variable, c('entropy', 'median', 'max', 'min')]
+    var.entropies[kld_num_train_df$variable,
+                  c('entropy', 'median', 'max', 'min')]
     )
 
 ```
