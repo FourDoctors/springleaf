@@ -308,7 +308,8 @@ outlying.values <- function(var, data=train, degree=2){
 
 ```{r dpoutlyer}
 
-dpoutlyers <- function(xs, data=train, offset=5, rarity = 0.001) {
+dpoutlyers <- function(xs, data=train, offset=10, rarity = 0.001) {
+    N <- length(xs)
     xs <- xs[!is.na(xs)]
     xsneg <- xs[xs < 0]
     xs <- xs[xs >= 0]
@@ -322,7 +323,7 @@ dpoutlyers <- function(xs, data=train, offset=5, rarity = 0.001) {
     cdps <- rep(0, n)
     cdps[as.numeric(names(tdps))] <- as.numeric(tdps)
     if (length(cdps) <= 1) return(olneg)
-    if ( (cdps[n-1] == 0) | (cdps[n]/cdps[n-1] < rarity)) {
+    if ( (cdps[n-1] == 0) | (cdps[n]/N < rarity)) {
         polps <- unique(xs[dps == n])
         polps <- polps[polps > 10]
         uxs <- unique(xs)

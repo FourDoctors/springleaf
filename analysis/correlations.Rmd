@@ -24,7 +24,7 @@ lapply(reqdpkgs, library, character.only=TRUE)
 
 ```
 
-#Introduction
+#Correlations and Entropies
 
 We study the correlations between the variables. We can use the
 error-code fixed data, reading it directly fromt he saved csvs, or we
@@ -70,6 +70,7 @@ We will separate the columns by their data-type,
 predictors_chr <- predictors[predictor_types == 'character']
 predictors_num <- predictors[predictor_types == 'integer' |
                                  predictor_types == 'numeric']
+predictors_log <- predictors[predictor_types == 'logical']
 
 ```
 
@@ -109,7 +110,8 @@ predictor.entropies <- function(vars, data=train, useNA='no') {
         list(
             variable = vars,
             entropy = sapply(vars, function(p) {
-                                 tab <- as.numeric(table(train[,p]), useNA = useNA)
+                                 tab <- as.numeric(table(train[,p]),
+                                                   useNA = useNA)
                                  p <- tab/sum(tab)
                                  - sum(p * log2(p))
                              }),
@@ -124,14 +126,35 @@ predictor.entropies <- function(vars, data=train, useNA='no') {
                          }),
             distinct_vals = sapply(vars, function(p) {
                                        length(unique(train[,p], na.rm=TRUE))
+
                                    })
             ),
         stringsAsFactor = FALSE
+                                   }),
+            nacount = sapply(vars, function(p) {
+                                 sum(is.na(train[,p]))
+                             }),
+            datatype = sapply(vars, function(p) class(data[, p]))
+            ),
+        stringsAsFactors=FALSE
         )
 
     df$num_eff_vals <- 2**(df$entropy)
+    df <- df[order(df$num_eff_vals),]
     df
 }
+
+```
+
+First we look at the entropy and the effective number of values for
+each variable.
+
+```{r varenteffval}
+
+var.entropies <- predictor.entropies(predictors)
+print(head(var.entropies))
+
+save(var.entropies, file=paste(datapath, "varEntropies.Rdata", sep=""))
 
 ```
 
@@ -139,25 +162,11 @@ We have written a function that computes the entropies of the
 variables. We use that function to compute the entropies for the
 error-code fixed data. We expect the function to be loaded in this R session.
 
-```{r varentropies}
-
-var.entropies <- predictor.entropies(names(train))
-var.entropies$median <- as.numeric(var.entropies$median)
-var.entropies$max <- as.numeric(var.entropies$max)
-var.entropies$min <- as.numeric(var.entropies$min)
-var.entropies$datatype <- predictor_types[var.entropies$variable]
-
-```
-
 **NOTICE** We have labelled the data variables as *date_xxx*, but have
   not labelled them as such above. These variables should be labelled
   as _character_, and we will relabel them as _date_ when
   appropriate. Another thing to remember is that the numeric variables
   are both _integer_ and _numeric_ in _var.entropies$datatype_.
-
-<<<<<<< HEAD=======
-
-#Highly correlated variables.
 
 
 
@@ -173,6 +182,7 @@ test <- test[, !(names(train) %in% vars_nodata)]
 print(paste("after removing columns without data", ncol(train)))
 
 ```
+
 # Highly correlated variables.
 
 
@@ -189,7 +199,6 @@ var.3val.cor <- cor(train[, with(var.entropies,
                                  variable[distinct_vals == 3 &
                                               (datatype == 'integer' |
                                                    datatype == 'numeric')
-
                                           ]
                                  )
                           ],
@@ -206,7 +215,6 @@ var.4val.cor <- cor(train[, with(var.entropies,
                                  variable[distinct_vals == 4 &
                                               (datatype == 'integer' |
                                                    datatype == 'numeric')
-
                                           ]
                                  )
                           ],
@@ -333,7 +341,7 @@ The variable _distinct_ in *kld_num_train_df* also counts NA. We will
 create another variable in that data-frame that tells us if the
 variable contains NAs, and will then add entropies, min, max, etc from _var.entropies_.
 
-=======
+
 ```
 The variable _distinct_ in *kld_num_train_df* also counts NA. We will
 create another variable in that data-frame that tells us if the
@@ -347,7 +355,6 @@ create another variable in that data-frame that tells us if the
 variable contains NAs, and will then add entropies, min, max, etc from _var.entropies_.
 
 
->>>>>>> b7cb1da0a63d43dab85680fb2d46585a2a2da8ab
 ```{r kldhasna}
 
 kld_num_train_df$hasna <- sapply(kld_num_train_df$variable,
@@ -367,3 +374,174 @@ kld_num_train_df <- cbind(
 save(kld_num_train_df, file="../data/kld_num_train_df.Rdata")
 
 ```
+
+#Number of NAs
+
+We will write a function that filters the predictors by their number
+of NAs. To begin we explore how many NAs there are in the
+variables. We will make a CDF plot.
+
+```{r numnacdf}
+
+nacount <- sort(var.entropies$nacount)
+naprob <- (1:length(nacount))/length(nacount)
+xyplot(naprob ~ log10(nacount), type='l')
+
+```
+From the plot we can see that about 85% of the predictors have fewer
+than a thousand NAs, suggesting that we can drop the remaining
+predictors. In fact for this data, the CDF plot was probably
+unnecessary. We can just glare at the table,
+
+```{r numnatable}
+
+nacount_table <- data.frame(table(var.entropies[, c("datatype", "nacount")]))
+nacount_table$nacount <- as.numeric(as.character(nacount_table$nacount))
+print(nacount_table)
+
+print("Number of predictors without any NAs")
+print(with(nacount_table, Freq[nacount==0]))
+print("Number of predictors with more than 100000 NAs")
+print(with(nacount_table, sum(Freq[nacount > 100000])))
+
+```
+A first filter then should be 0 NAs,
+
+```{r nafilter0}
+
+print(subset(nacount_table, nacount==0))
+
+```
+
+We will miss the truly numeric variables in this filter!
+
+```{r nonapredictors}
+
+nonapredictors <- with(var.entropies, variable[nacount == 0])
+
+```
+
+#Numeric variables with many distinct values.
+
+How many distinct values do the predictors have?
+Or how many predictors with a few distinct values?
+
+```{r distinctdistr}
+
+dvs <- sort( var.entropies$distinct_vals)
+histogram(~ log10(dvs))
+dvp <- (1:length(dvs))/length(dvs)
+xyplot(dvp ~ log2(dvs), type="l")
+
+```
+
+```{r entdistr}
+
+ents <- sort(var.entropies$entropy)
+histogram( ~ ents)
+ents_p <- (1:length(ents))/length(ents)
+xyplot(ents_p ~ ents, type="l")
+
+```
+
+In our comparison of variables we will need to compare two
+variables. For this we write a function,
+
+```{r compareTwoVars}
+
+comparison2vars <- function(u, v){
+    xs = train[,u]
+    ys = train[,v]
+    muv = melt(train[, c(u,v)])
+    list(
+        correlation=cor(xs, ys, use='pairwise.complete.obs'),
+        kld = kld(xs[!is.na(xs)], ys[!is.na(ys)], asymm=FALSE),
+        hist.lin = histogram( ~ value | variable,
+            data=muv,
+            layout=c(1,2)),
+        hist.log = histogram( ~ log10(value) |  variable,
+            data=muv,
+            layout=c(1,2))
+        )
+}
+
+cumplot <- function(xs, logscale = FALSE) {
+    xs <- sort( xs[!is.na(xs)])
+    if (logscale) xs <- sort(log10(xs[ xs >= 0] + 1))
+    n <- length(xs)
+    p <- (1:n)/n
+    xyplot(p ~ xs, type='l')
+}
+
+removedValues <- function(xs, vs) xs[ ! xs %in% vs]
+
+melt.noec <- function(data, ovl){
+    vars <- names(data)
+    data <- as.data.frame(do.call(cbind,
+                               lapply(vars,
+                                      function(v){
+                                          x <- data[,v]
+                                          x[ x %in% ovl[[v]]] <- NA
+                                          x
+                                      })
+                               )
+                          )
+    names(data) <- vars
+    melt(data)
+    }
+
+
+```
+
+For a plot of histograms for variables that have a given number of
+effective values we write a function,
+
+```{r plotvarsgiveneffvals}
+plotHistsForGivenEffVals <- function(nmin,
+                                     nmax,
+                                     data=train,
+                                     ovl=ovl_10,
+                                     vents=var.entropies,
+                                     logscale=TRUE){
+    vars <- with(vents, variable[floor(num_eff_vals) >= nmin &
+                                     floor(num_eff_vals) < nmax])
+    dt <- data[, vars]
+    ml <- melt.noec(dt, ovl)
+    ml <- subset(ml, !is.na(value))
+    if(logscale) {
+        ml <- subset(ml, value >= 0)
+        ml$value <- log10(ml$value + 1)
+    }
+    histogram(~ value | variable, data=ml)
+}
+
+```
+
+Lets give var.entropies columns for max, min, and median for non-ec
+values.
+
+```{r maxminmednonex}
+
+var.entropies$max_nonec <- sapply(var.entropies$variable,
+                                  function(p){
+                                      max(removedValues(train[,p], ovl_10[[p]]),
+                                          na.rm=TRUE)
+                                  })
+var.entropies$min_nonec <- sapply(var.entropies$variable,
+                                  function(p){
+                                      min(removedValues(train[,p], ovl_10[[p]]),
+                                          na.rm=TRUE)
+                                  })
+var.entropies$median_nonec <- sapply(var.entropies$variable,
+                                  function(p){
+                                      median(removedValues(train[, p], ovl_10[[p]]),
+                                             na.rm=TRUE)
+                                  })
+
+viewVarEnt <- function(vents=var.entropies){
+    vents[, c('entropy', 'min_nonec', 'median_nonec', 'max_nonec', 'distinct_vals', 'nacount')]
+}
+
+```
+
+
