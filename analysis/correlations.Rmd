@@ -59,7 +59,6 @@ any data in the training set. We should remove this from our data,
 ```{r datatypes}
 
 N.original <- nrow(train)
-
 V <- ncol(train)
 predictors <- names(train)[-V]
 predictor_types <- sapply(predictors, function(p) class(train[, p]))
@@ -183,6 +182,8 @@ vars_nodata <- with(var.entropies, variable[nacount==N.original])
 train <- train[, !(names(train) %in% vars_nodata)]
 test <- test[, !(names(train) %in% vars_nodata)]
 print(paste("after removing columns without data", ncol(train)))
+
+```
 
 # Highly correlated variables.
 
@@ -416,3 +417,77 @@ We will miss the truly numeric variables in this filter!
 nonapredictors <- with(var.entropies, variable[nacount == 0])
 
 ```
+
+#Numeric variables with many distinct values.
+
+How many distinct values do the predictors have?
+Or how many predictors with a few distinct values?
+
+```{r distinctdistr}
+
+dvs <- sort( var.entropies$distinct_vals)
+histogram(~ log10(dvs))
+dvp <- (1:length(dvs))/length(dvs)
+xyplot(dvp ~ log2(dvs), type="l")
+
+```
+
+```{r entdistr}
+
+ents <- sort(var.entropies$entropy)
+histogram( ~ ents)
+ents_p <- (1:length(ents))/length(ents)
+xyplot(ents_p ~ ents, type="l")
+
+```
+
+In our comparison of variables we will need to compare two
+variables. For this we write a function,
+
+```{r compareTwoVars}
+
+comparison2vars <- function(u, v){
+    xs = train[,u]
+    ys = train[,v]
+    muv = melt(train[, c(u,v)])
+    list(
+        correlation=cor(xs, ys, use='pairwise.complete.obs'),
+        kld = kld(xs[!is.na(xs)], ys[!is.na(ys)], asymm=FALSE),
+        hist.lin = histogram( ~ value | variable,
+            data=muv,
+            layout=c(1,2)),
+        hist.log = histogram( ~ log10(value) |  variable,
+            data=muv,
+            layout=c(1,2))
+        )
+}
+
+cumplot <- function(xs, logscale = FALSE) {
+    xs <- sort( xs[!is.na(xs)])
+    if (logscale) xs <- sort(log10(xs[ xs >= 0] + 1))
+    n <- length(xs)
+    p <- (1:n)/n
+    xyplot(p ~ xs, type='l')
+}
+
+removedValues <- function(xs, vs) xs[ ! xs %in% vs]
+
+melt.noec <- function(data, ovl){
+    vars <- names(data)
+    data <- as.data.frame(do.call(cbind,
+                               lapply(vars,
+                                      function(v){
+                                          x <- data[,v]
+                                          x[ x %in% ovl[[v]]] <- NA
+                                          x
+                                      })
+                               )
+                          )
+    names(data) <- vars
+    melt(data)
+    }
+
+
+```
+
+
