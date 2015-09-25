@@ -524,22 +524,24 @@ values.
 
 var.entropies$max_nonec <- sapply(var.entropies$variable,
                                   function(p){
-                                      max(removedValues(train[,p], ovl_10[[p]]),
+                                      max(removedValues(train[,p], ovl_10_00001[[p]]),
                                           na.rm=TRUE)
                                   })
+
 var.entropies$min_nonec <- sapply(var.entropies$variable,
                                   function(p){
-                                      min(removedValues(train[,p], ovl_10[[p]]),
+                                      min(removedValues(train[,p], ovl_10_00001[[p]]),
                                           na.rm=TRUE)
                                   })
+
 var.entropies$median_nonec <- sapply(var.entropies$variable,
                                   function(p){
-                                      median(removedValues(train[, p], ovl_10[[p]]),
+                                      median(removedValues(train[, p], ovl_10_00001[[p]]),
                                              na.rm=TRUE)
                                   })
 
 viewVarEnt <- function(vents=var.entropies){
-    vents[, c('entropy', 'min_nonec', 'median_nonec', 'max_nonec', 'distinct_vals', 'nacount')]
+    vents[, c('entropy', 'distinct_vals', 'nacount')]
 }
 
 ```

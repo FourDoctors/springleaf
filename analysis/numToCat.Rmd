@@ -1,0 +1,135 @@
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(cache=FALSE)
+knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(include=TRUE)
+knitr::opts_chunk$set(results="asis")
+knitr::opts_chunk$set(fig.width=12)
+knitr::opts_chunk$set(fig.height=14)
+prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
+datapath <- paste(prjpath, "data/", sep="")
+analpath <- paste(prjpath, "analysis/", sep="")
+rcodepath <- paste(analpath, "Rcode/", sep="")
+setwd(analpath)
+
+```
+
+
+```{r loadLibsAndSource, include=FALSE}
+
+reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
+              "plyr",  "lubridate", "Hmisc", "corrplot",
+              "rpart", "rpart.plot", "RWeka",
+              "caret", "gbm", "randomForest")
+lapply(reqdpkgs, library, character.only=TRUE)
+
+
+```
+
+# Numerical or categorical variables
+
+We will decide some of the numerical variables as categorical, and use
+them for modeling.
+
+We need the outlying values for the numerical variables, which we
+suspect to be error-codes. We create a list for all the predictors
+that there are, which will contain non-empty lists only for numerical
+variables (numeric or interger).
+
+```{r obtainoutliers}
+ovl_10_001<- lapply(predictors,
+                 function(var) {
+                     print("outliers for ")
+                     ol <- dpoutlyers(train[, var], offset=10, rarity=0.001)
+                     print(var)
+                     print(ol)
+                 }
+                 )
+
+names(ovl_10_001) <- predictors
+
+ovl_10_00001<- lapply(predictors,
+                 function(var) {
+                     print("outliers for ")
+                     ol <- dpoutlyers(train[, var], offset=10, rarity=1e-5)
+                     print(var)
+                     print(ol)
+                 }
+                 )
+
+names(ovl_10_00001) <- predictors
+
+```
+
+## First model
+
+We will declare the variables with less than 10 distinct values to be
+categorical,
+
+```{r lessthan10}
+
+train.model <-  train
+test.model <- test
+
+preds.model.num <- with(var.entropies,
+                        variable[ (datatype == 'numeric' |
+                                       datatype == 'integer') &
+                                     distinct_vals > 10]
+                        )
+
+preds.model.numcat <- with(var.entropies,
+                           variable[ (datatype == 'numeric' |
+                                          datatype == 'integer') &
+                                        distinct_vals <= 10]
+                           )
+preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
+preds.model.cats <- predictors_chr[ !grepl(x=predictors_chr, pattern='date')]
+preds.model.logs <- predictors_log
+for (p in preds.model.numcat) {
+    train.model[,p] <- as.factor(train.model[,p])
+}
+
+for (p in preds.model.cats) {
+    train.model[,p] <- as.factor(train.model[,p])
+}
+
+preds.model <- c(preds.model.num, preds.model.numcat,
+                 preds.model.logs, preds.model.cats)
+```
+If try all, there will be too many variables. So we drop some
+
+```{r dropvars}
+
+keep.preds.model <- sapply(preds.model,
+                           function(p){
+                              k <- ( var.entropies[p, 'entropy'] > 0.1 &
+                                        var.entropies[p, 'nacount'] < 0.5 * nrow(train.model) )
+                              if (var.entropies[p, 'datatype'] == 'character') {
+                                  k <- k & ( var.entropies[p, 'distinct_vals'] < 100)
+                              }
+                              k
+                           })
+
+
+
+fit.rpart <- rpart(target ~ .,
+                   data = train.model[, c(preds.model[keep.preds.model], "target")]
+                   )
+
+```
+
+Lets see what our fit has given us,
+
+```{r treemodelplot}
+
+
+
+
+
+
+
+
+
+
+
+

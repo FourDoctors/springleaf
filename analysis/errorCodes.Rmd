@@ -306,9 +306,12 @@ outlying.values <- function(var, data=train, degree=2){
 
 ```
 
+We can also use a decimal point based detector.
+
 ```{r dpoutlyer}
 
 dpoutlyers <- function(xs, data=train, offset=10, rarity = 0.001) {
+    if (class(xs) != 'numeric' & class(xs) != 'integer') return(c())
     N <- length(xs)
     xs <- xs[!is.na(xs)]
     xsneg <- xs[xs < 0]
