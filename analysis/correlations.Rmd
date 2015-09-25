@@ -23,7 +23,7 @@ lapply(reqdpkgs, library, character.only=TRUE)
 
 ```
 
-#Introduction
+#Correlations and Entropies
 
 
 We study the correlations between the variables. We can use the
@@ -490,4 +490,54 @@ melt.noec <- function(data, ovl){
 
 ```
 
+For a plot of histograms for variables that have a given number of
+effective values we write a function,
+
+```{r plotvarsgiveneffvals}
+plotHistsForGivenEffVals <- function(nmin,
+                                     nmax,
+                                     data=train,
+                                     ovl=ovl_10,
+                                     vents=var.entropies,
+                                     logscale=TRUE){
+    vars <- with(vents, variable[floor(num_eff_vals) >= nmin &
+                                     floor(num_eff_vals) < nmax])
+    dt <- data[, vars]
+    ml <- melt.noec(dt, ovl)
+    ml <- subset(ml, !is.na(value))
+    if(logscale) {
+        ml <- subset(ml, value >= 0)
+        ml$value <- log10(ml$value + 1)
+    }
+    histogram(~ value | variable, data=ml)
+}
+
+```
+
+Lets give var.entropies columns for max, min, and median for non-ec
+values.
+
+```{r maxminmednonex}
+
+var.entropies$max_nonec <- sapply(var.entropies$variable,
+                                  function(p){
+                                      max(removedValues(train[,p], ovl_10[[p]]),
+                                          na.rm=TRUE)
+                                  })
+var.entropies$min_nonec <- sapply(var.entropies$variable,
+                                  function(p){
+                                      min(removedValues(train[,p], ovl_10[[p]]),
+                                          na.rm=TRUE)
+                                  })
+var.entropies$median_nonec <- sapply(var.entropies$variable,
+                                  function(p){
+                                      median(removedValues(train[, p], ovl_10[[p]]),
+                                             na.rm=TRUE)
+                                  })
+
+viewVarEnt <- function(vents=var.entropies){
+    vents[, c('entropy', 'min_nonec', 'median_nonec', 'max_nonec', 'distinct_vals', 'nacount')]
+}
+
+```
 
