@@ -77,8 +77,8 @@ predictors_log <- predictors[predictor_types == 'logical']
 ```{r assumedvalsfew}
 
 predictor.values.counts <- function(p, data=train){
-    vals <- sort(unique(train[, p]), na.last=TRUE)
-    tab <- data.frame(table(train[, p], useNA='ifany'))
+    vals <- sort(unique(data[, p]), na.last=TRUE)
+    tab <- data.frame(table(data[, p], useNA='ifany'))
     names(tab) <- c('value', 'count')
     tab$predictor <- p
     tab[, c("predictor", "value", "count")]
@@ -89,7 +89,7 @@ predictor.values <- function(vars, n, data=train) {
                  do.call(rbind,
                          lapply(vars,
                                 function(p) {
-                                    sort(unique(train[, p]), na.last=TRUE)
+                                    sort(unique(data[, p]), na.last=TRUE)
                                 })
                          )
                  )
@@ -97,7 +97,7 @@ predictor.values <- function(vars, n, data=train) {
     names(df) <- c("variable", paste("value", 1:n, sep="."))
     df$entropy <- sapply(vars,
                          function(p) {
-                             tab <- as.numeric(table(train[, p]))
+                             tab <- as.numeric(table(data[, p]))
                              prob <- tab/sum(tab)
                              -1 * sum(prob * log(prob))
                          })
@@ -110,29 +110,27 @@ predictor.entropies <- function(vars, data=train, useNA='no') {
         list(
             variable = vars,
             entropy = sapply(vars, function(p) {
-                                 tab <- as.numeric(table(train[,p]),
+                                 tab <- as.numeric(table(data[,p]),
                                                    useNA = useNA)
                                  p <- tab/sum(tab)
                                  - sum(p * log2(p))
                              }),
             median = sapply(vars, function(p) {
-                                median(train[,p], na.rm=TRUE)
+                                median(data[,p], na.rm=TRUE)
                             }),
             max = sapply(vars, function(p) {
-                             max(train[,p], na.rm=TRUE)
+                             max(data[,p], na.rm=TRUE)
                          }),
             min = sapply(vars, function(p) {
-                             min(train[, p], na.rm=TRUE)
+                             min(data[, p], na.rm=TRUE)
                          }),
             distinct_vals = sapply(vars, function(p) {
-                                       length(unique(train[,p], na.rm=TRUE))
+                                       length(unique(data[,p], na.rm=TRUE))
 
                                    })
             ),
-        stringsAsFactor = FALSE
-                                   }),
             nacount = sapply(vars, function(p) {
-                                 sum(is.na(train[,p]))
+                                 sum(is.na(data[,p]))
                              }),
             datatype = sapply(vars, function(p) class(data[, p]))
             ),

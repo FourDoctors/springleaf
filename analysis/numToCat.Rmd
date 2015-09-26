@@ -37,6 +37,7 @@ that there are, which will contain non-empty lists only for numerical
 variables (numeric or interger).
 
 ```{r obtainoutliers}
+
 ovl_10_001<- lapply(predictors,
                  function(var) {
                      print("outliers for ")
@@ -58,6 +59,24 @@ ovl_10_00001<- lapply(predictors,
                  )
 
 names(ovl_10_00001) <- predictors
+
+```
+
+Now that we have error-codes in _ovl_, we can remove these to obtain
+datasets without the error-codes,
+
+```{r removeec}
+
+train.noec <- train
+test.noec <- test
+for (p in names(ovl_10_00001)) {
+         x <- train[,p]
+         x[ !(x %in% ovl_10_00001[[p]]) ] <- NA
+         train.noec[,p] <- x
+         y <- test[,p]
+         y[ !(y %in% ovl_10_00001[[p]]) ] <- NA
+         test.noec[,p] <- y
+     }
 
 ```
 
@@ -85,6 +104,13 @@ preds.model.numcat <- with(var.entropies,
 preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
 preds.model.cats <- predictors_chr[ !grepl(x=predictors_chr, pattern='date')]
 preds.model.logs <- predictors_log
+
+                                        # set the dates from strings
+
+for (p in preds.model.dates) {
+    train.model[, p] <- ymd(train.model[,p])
+}
+
 for (p in preds.model.numcat) {
     train.model[,p] <- as.factor(train.model[,p])
 }
@@ -95,6 +121,7 @@ for (p in preds.model.cats) {
 
 preds.model <- c(preds.model.num, preds.model.numcat,
                  preds.model.logs, preds.model.cats)
+
 ```
 If try all, there will be too many variables. So we drop some
 
@@ -111,16 +138,15 @@ keep.preds.model <- sapply(preds.model,
                            })
 
 
-
+train.model$target <- as.factor(train.model$target)
 fit.rpart <- rpart(target ~ .,
-                   data = train.model[, c(preds.model[keep.preds.model], "target")]
+                   data = train.model[, c(preds.model[keep.preds.model], "target")],
+                   method='class'
                    )
 
 ```
 
-Lets see what our fit has given us,
 
-```{r treemodelplot}
 
 
 

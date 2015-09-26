@@ -1,4 +1,5 @@
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(cache=FALSE)
 knitr::opts_chunk$set(echo=FALSE)
 knitr::opts_chunk$set(include=TRUE)
@@ -7,32 +8,351 @@ knitr::opts_chunk$set(fig.width=12)
 knitr::opts_chunk$set(fig.height=14)
 prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
 datapath <- paste(prjpath, "data/", sep="")
-analpath <- paste(prjpath, "analyses/", sep="")
+analpath <- paste(prjpath, "analysis/", sep="")
 rcodepath <- paste(analpath, "Rcode/", sep="")
 setwd(analpath)
+
+
 ```
 ```{r loadLibsAndSource, include=FALSE}
+
 reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
-              "ggmap",	"plyr", "corrplot", "lubridate",
-              "Hmisc", "corrplot", "rgdal", "sp")
+              "plyr",  "lubridate", "Hmisc", "corrplot",
+              "rpart", "rpart.plot", "RWeka",
+              "caret", "gbm", "randomForest")
 lapply(reqdpkgs, library, character.only=TRUE)
+
 ```
-## Simple models
+# Simple models
+
+## A recipe to start modeling
+
+Here we will develop a simple recipe to start modeling. Modeling
+requires a lot of experimenting and hacking, and can lead to
+incomprehensible code. We will try to develop good habits, documenting
+as many of the ideas that we get in the process of modeling so that
+they can be reproduced during the next session.
+
+When any of our ideas produce decent results we can save our work as
+both an independent Rmd, and as an R code script that can be use in
+future modeling sessions.
+
+We will consider several different model families here, which will be
+further pursued in their own files. The goal is to get an idea on
+which model families are suited for this dataset.
+
+## Load data
+
+We need to load data to start modeling. We can load directly from the
+csvs, or we can use the saved Rdata which will be faster. For all of
+our models we will use the labeled data,
+
+```{r loaddata}
+
+train <- load("../data/train_labeled.Rdata")
+test <- load("../data/test_labeled.Rdata")
+
+```
+
+There are many predictors, and without helpful names. We will run our
+models by passing the predictors as a vector of names. So we extract
+the variables from the dataset,
+
+```{r predictorlists}
+
+V <- ncol(train)
+predictors <- names(train)[-V] # the last variable is the outcome, target
+predictor_types <- sapply(predictors, function(p) class(train[, p]))
+predictors_chr <- predictors[predictor_types == 'character']
+predictors_num <- predictors[predictor_types == 'integer' |
+                                 predictor_types == 'numeric']
+predictors_log <- predictors[predictor_types == 'logical']
+
+```
+
 Before we begin to investigate what models should be appropriate, we
 need a baseline error to compare against. For the baseline, lets look
 at how many 1s there are in the target.
+
 ```{r baseline}
+
 baseline <- mean(train$target)
 print( paste("Fraction of ones in the target", round(baseline,2)))
+
 ```
 With only about 23% ones in the target, our default prediction of 0
 would lead to an error on only 0.23. Any model worth the effort should
 achieve an error larger than this value, hence the baseline of 0.23.
 
 ```{r baseline2}
+
 print(paste("we have set a null model of target = 0 for any input"))
 print(paste("this null model has a baseline error of ", baseline))
+
 ```
+
+## Load scripts
+
+We have several scripts that can be helpful for modeling. For example,
+if we had started from raw data we would use the labeling scripts to
+label the data for analysis. Instead we have already saved the labeled
+data that we loaded above. We will need the functions defined in
+_errorCodes.R_ which has been extracted from the Rmd _errorCodes.Rmd_,
+
+```{r loadscripts}
+
+source("../Rcode/errorCodes.R")
+source("../Rcode/correlations.R")
+
+```
+
+Any other scripts that we may write and want to include should also go
+above.
+
+## Error-codes
+
+Not all the values in the numerical columns are real values. Some are
+error-codes, that we written a function to identify. We can pass
+arguments to that function to obtain the error-codes for different
+criteria. We have already figured out a set of arguments, that we use
+for our current analysis,
+
+```{r ovl}
+
+ovl_10_00001<- lapply(predictors,
+                 function(var) {
+                     print("outliers for ")
+                     ol <- dpoutlyers(train[, var], offset=10, rarity=1e-5)
+                     print(var)
+                     print(ol)
+                 }
+                 )
+
+names(ovl_10_00001) <- predictors
+
+```
+
+We will create datasets without the error-codes, which can be used for
+a cleaner comparison of variables, and also for modeling. Once we have
+better grasp on models that work, we will decide what to do with the
+information in the error-codes.
+
+```{r removeec}
+
+train.noec <- train
+test.noec <- test
+for (p in names(ovl_10_00001)) {
+         x <- train[,p]
+         x[ !(x %in% ovl_10_00001[[p]]) ] <- NA
+         train.noec[,p] <- x
+         y <- test[,p]
+         y[ !(y %in% ovl_10_00001[[p]]) ] <- NA
+         test.noec[,p] <- y
+     }
+
+```
+
+## Data preparation for modeling
+
+We have the datasets, but they are not ready for modeling. As a
+general procedure, we want to keep the original datasets untouched. So
+we copy them into model sets, and make lists of suitable predictors
+according to their datatypes and other properties that we find
+suitable.
+
+**Some of the character variables are problematic. These are the job and
+location descriptors of the rows. May be these contain a lot of
+relevant information, but will require special treatment before they
+can be deployed for prediction.**
+
+We will replace NAs by unknowns, for all categorical variables.
+
+```{r modeldataandpreds}
+
+train.model <- train
+test.model <- test
+
+numcutoff <- 10
+preds.model.num <- with(var.entropies,
+                        variable[ (datatype=='numeric' |
+                                       datatype=='integer') &
+                                     distinct_vals > numcutoff]
+                        )
+
+preds.model.numcat <- with(var.entropies,
+                           variable[ (datatype=='numeric' |
+                                          datatype=='integer') &
+                                        distinct_vals <= numcutoff]
+                           )
+
+preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
+
+preds.model.cats <- c('hrq', 'cbns', 'abcdefu',
+                      'shrug_first', 'shrug_second', 'shrug_third',
+                      'oru_first', 'oru_second', 'oru_third',
+                      'eye', 'status', 'medium', 'idused')
+preds.model.jobs <- c('job_first', 'job_second')
+preds.model.locs <- c('state_first', 'state_second', 'city')
+
+preds.model.logs <- predictors_log
+
+## set dates from strings
+
+for(p in preds.model.dates) {
+    train.model[,p] <- ymd(train.model[,p])
+}
+
+for(p in preds.model.numcat) {
+    x <- train.model[,p]
+    x[is.na(x)] <- 'unknown'
+    train.model[,p] <- as.factor(x)
+}
+
+for (p in preds.model.cats) {
+    x <- train.model[,p]
+    x[is.na(x)] <- 'unknown'
+    train.model[,p] <- as.factor(x)
+}
+
+## year of date as a factor
+
+for (p in preds.model.dates) {
+    py <- paste(p, 'year', sep='.')
+    x <- as.character(year(train.model[,p]))
+    x[is.na(x)] <- 'unknown'
+    train.model[, py] <- as.factor(x)
+}
+
+preds.model.dates.year <- paste(preds.model.dates,
+                                'year', sep='.')
+
+```
+
+Now that we added new columns as years of the dates, we need to add
+these to the dateframes for variable properties.
+
+```{r yeartovarents}
+
+var.entropies.year <- predictor.entropies(preds.model.dates.year,
+                                           data=train.model)
+
+var.entropies <- rbind(var.entropies, var.entropies.year[, names(var.entropies)])
+
+kld.allvars <- kld.vars(predictors, data=train)
+kld.years <- kld.vars(preds.model.dates.year, data=train.model)
+kld.allvars <- rbind(kld.allvars, kld.years)
+kld.allvars <- with(kld.allvars, kld.allvars[ order(kld/entropy, decreasing=TRUE), ])
+
+```
+
+If try all, there will be too many variables. So we drop some
+
+```{r dropvars}
+
+preds.model <- setdiff(
+    unique(c(preds.model.num, preds.model.numcat,
+             preds.model.logs, preds.model.cats,
+             preds.model.dates.year)),
+    c("X", "ID")
+    )
+
+keep.preds.model <- sapply(preds.model,
+                           function(p){
+                              k <- ( var.entropies[p, 'entropy'] > 0.1 &
+                                        var.entropies[p, 'nacount'] < 0.5 * nrow(train.model) )
+                              k
+                           })
+
+
+train.model$target <- as.factor(train.model$target)
+fit.rpart <- rpart(target ~ .,
+                   data = train.model[, c(preds.model[keep.preds.model], "target")],
+                   method='class'
+                   )
+
+```
+
+The first model was the same as the baseline model. We will next
+consider top variables by their relative kld/entropy.
+
+### Rpart 1: Use variables with high relative kld
+
+```{r highrelativekld}
+
+preds.model.1 <- with(kld.allvars, variable[ entropy > 0.5 &
+                                              notna1 + notna0 > 1.4e5][1:20])
+
+
+preds.model.2 <- Filter(function(p) {
+                            with(kld.allvars[p,], distinct > 1e5 &
+                                     notna1 + notna0 > 1.4e5)
+                        },
+                        preds.model.num
+                        )
+
+preds.model <- union(preds.model.1, preds.model.2)
+
+fit.rpart.1 <- rpart(target ~ .,
+                     data = train.model[, c(preds.model, "target")],
+                     )
+
+```
+
+### Rpart 2: Use variable with high kld
+
+```{r highkld}
+
+kld.allvars <- kld.allvars[order(kld.allvars$kld, decreasing=TRUE), ]
+preds.model <- kld.allvars$variable[1:30]
+
+fit.rpart.2 <- rpart(target ~ .,
+                     data=train.model[, c(preds.model, "target")],
+                     control=rpart.control(
+                         minsplit=5,
+                         cp=0.01,
+                         maxdepth=10
+                         )
+                     )
+
+```
+
+### Rpart 3: Choose the predictors by their number of distinct values
+
+```{r choosebynumberofdistinct}
+
+naentfilter <- function(data, notnanum = 1e5, e = 0.1){
+    with(data, (notna1 + notna0 > notnanum) & entropy > e)
+}
+kldfilter <- function(data, k=0.01){
+    with(data, kld > k)
+}
+
+
+preds.model.n <- with(kld.allvars,
+                      variable[naentfilter(kld.allvars) &
+                                   kldfilter(kld.allvars)]
+                      )
+preds.model.2 <- with(kld.allvars[preds.model.n, ],
+                      variable[distinct == 2])
+preds.model.3 <- with(kld.allvars[preds.model.n, ],
+                      variable[distinct == 3])
+preds.model.4 <- with(kld.allvars[preds.model.n, ],
+                      variable[distinct == 4])
+preds.model.5 <- with(kld.allvars[preds.model.n, ],
+                      variable[distinct == 5])
+
+preds.model <- c(preds.model.1, preds.model.2,
+                 preds.model.3, preds.model.4,
+                 preds.model.5)
+
+fit.rpart <- rpart(target ~ .,
+                   data = train.model[, c('target', preds.model)]
+                   )
+
+prp(fit.rpart, varlen=0)
+
+```
+## Logistic regression
 
 Lets first consider the numeric  variables with two distinct values. Some of
 these are useless because the two values for these variables consist
@@ -69,28 +389,43 @@ err.numeric3 <- sum( (tp.numeric3 > 0.5) != train$target, na.rm=TRUE)/nrow(train
 print("the logistic model with only numeric variables that take 3 values")
 print(paste("training error :  ", round(err.numeric3,2)))
 print(paste("compared to baseline: ", round(err.numeric3/baseline, 2)))
+
 ```
 
 Lets automate this process,
 
 ```{r logisticWithNvalsVars}
-for(n in 2:max(num_vals_num_vars$num_vals)){
-    predictors <- with(num_vals_num_vars, label[num_vals == n])
-    m <- glm(target ~ .,
-             data = train[, c(predictors, 'target')],
-             family='binomial'
-             )
-    tp <- predict(m, newdata=train, type='response')
-    err <- sum( (tp > 0.5) != train$target, na.rm=TRUE)/nrow(train)
 
-    print(paste("the logistic model with only numeric variables that take ", n, " values"))
-    print(paste("total number of variables considered", length(predictors)))
-    print(paste("training error :  ", round(err,2)))
-    print(paste("compared to baseline: ", round(err/baseline, 2)))
-    print("|||||||||||||||||||||||||||||||||||||||")
+for(n in 2:max(var.entropies$distinct_vals)) {
+    predictors <- Filter(
+        function(p) {
+            var.entropies[p, 'entropy'] > 0.1 &
+                var.entropies[p, 'nacount'] < 1000
+        },
+        with(var.entropies, variable[distinct_vals == n &
+                                         (datatype == 'numeric' |
+                                              datatype == 'integer')])
+        )
+    print(paste("to try predictors with ", n , "distinct values"))
+    print(paste("total number of such predictors ", length(predictors)))
+    if(length(predictors) > 0) {
+        m <- glm(target ~ .,
+                 data = train[, c(predictors, 'target')],
+                 family='binomial'
+                 )
+        tp <- predict(m, newdata=train, type='response')
+        err <- sum( (tp > 0.5) != train$target, na.rm=TRUE)/nrow(train)
+        print(paste(" logistic model with only num vars that take ", n, " values"))
+        print(paste("total number of variables considered", length(predictors)))
+        print(paste("training error :  ", round(err,2)))
+        print(paste("compared to baseline: ", round(err/baseline, 2)))
+        print("|||||||||||||||||||||||||||||||||||||||")
+    }
 }
 
 
 ```{r cors1}
+
 cors1 <- cor(train[, num_vals_num_vars$label[127:136]], use="pairwise.complete.obs")
+
 ```

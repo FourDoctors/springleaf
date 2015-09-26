@@ -1,0 +1,28 @@
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(cache=FALSE)
+knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(include=TRUE)
+knitr::opts_chunk$set(results="asis")
+knitr::opts_chunk$set(fig.width=12)
+knitr::opts_chunk$set(fig.height=14)
+prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
+datapath <- paste(prjpath, "data/", sep="")
+analpath <- paste(prjpath, "analyses/", sep="")
+rcodepath <- paste(analpath, "Rcode/", sep="")
+setwd(analpath)
+
+```
+```{r loadLibsAndSource, include=FALSE}
+
+reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
+              "plyr",  "lubridate", "Hmisc", "corrplot",
+              "rpart", "rpart.plot", "RWeka",
+              "caret", "gbm", "randomForest")
+lapply(reqdpkgs, library, character.only=TRUE)
+
+```
+# The baseline model
+
+What is the baseline model for this data? We can consider this study
+as a recipe to develop further models.
