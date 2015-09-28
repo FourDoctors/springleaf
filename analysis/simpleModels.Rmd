@@ -173,6 +173,7 @@ train.model <- train
 test.model <- test
 
 numcutoff <- 10
+
 preds.model.num <- with(var.entropies,
                         variable[ (datatype=='numeric' |
                                        datatype=='integer') &
@@ -275,12 +276,40 @@ fit.rpart <- rpart(target ~ .,
 The first model was the same as the baseline model. We will next
 consider top variables by their relative kld/entropy.
 
-### Rpart 1: Use variables with high relative kld
+
+### Numerical variables on a log scale
+
+We have seen in the histograms that several variables are better
+characterized on a log-scale. Lets build a scheme to plot several of
+these together and browse through them,
+
+```{r logscalehistos}
+
+numcutoff <- 10
+pnums <- with(var.entropies,
+              variable[entropy > 0 & distinct_vals > numcutoff &
+                           (datatype == 'integer' | datatype == 'numeric')])
+
+
+n <- 200
+mld <- melt(noec.df(train[ , pnums[n:(n+15)]]))
+mld$variable <- paste(mld$variable,
+                      var.entropies[mld$variable, 'distinct_vals'],
+                      sep="/"
+                      )
+
+histogram(~ log10(1 + value) | variable,
+          data = mld,
+          cex=0.5
+          )
+
+```
+## Rpart 1: Use variables with high relative kld
 
 ```{r highrelativekld}
 
 preds.model.1 <- with(kld.allvars, variable[ entropy > 0.5 &
-                                              notna1 + notna0 > 1.4e5][1:20])
+                                              notna1 + notna0 > 1.4e5][1:200])
 
 
 preds.model.2 <- Filter(function(p) {

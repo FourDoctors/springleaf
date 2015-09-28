@@ -32,6 +32,12 @@ predictor.values <- function(vars, n, data=train) {
 }
 
 predictor.entropies <- function(vars, data=train, ovl=ovl_10_00001, useNA='no') {
+    vals.nonec <- function(p) {
+        xs <- data[,p]
+        vs <- ovl[[p]]
+        xs[ !(xs %in% vs) ]
+    }
+
     df <- data.frame(
         list(
             variable = vars,
@@ -41,22 +47,18 @@ predictor.entropies <- function(vars, data=train, ovl=ovl_10_00001, useNA='no') 
                                  p <- tab/sum(tab)
                                  - sum(p * log2(p))
                              }),
-            median = sapply(vars, function(p) {
-                                median(data[,p], na.rm=TRUE)
-                            }),
-            max = sapply(vars, function(p) {
-                             max(data[,p], na.rm=TRUE)
-                         }),
-            min = sapply(vars, function(p) {
-                             min(data[, p], na.rm=TRUE)
-                         }),
+            min = sapply(vars, function(p) min(data[, p], na.rm=TRUE)),
+            median = sapply(vars, function(p) median(data[,p], na.rm=TRUE)),
+            max = sapply(vars, function(p) max(data[,p], na.rm=TRUE)),
 
+            min.nonec = sapply(vars, function(p) min(vals.nonec(p))),
+            median.nonec = sapply(vars, function(p) median(vals.nonec(p))),
+            max.nonec = sapply(vars, function(p) max(vals.nonec(p))),
 
             distinct_vals = sapply(vars, function(p) {
                                        length(unique(data[,p], na.rm=TRUE))
 
-                                   })
-            ),
+                                   }),
             nacount = sapply(vars, function(p) {
                                  sum(is.na(data[,p]))
                              }),
@@ -93,6 +95,7 @@ kld <- function(x, y, asymm = TRUE){
 
 kld.vars <- function(vars, data=train){
     t0 <- data$target == 0
+    N <- length(vars)
     data.frame(
         list(
             variable = vars,
@@ -103,19 +106,35 @@ kld.vars <- function(vars, data=train){
                          }),
             entropy = sapply(vars, function(p) {
                                  tab <- as.numeric(table(data[,p]),
-                                                   useNA = no)
-                                 p <- tab/sub(tab)
+                                                   useNA = 'no')
+                                 p <- tab/sum(tab)
                                  - sum(p * log2(p))
                              }),
-            min = sapply(vars, function(p) min(data[,p], na.rm=TRUE)),
-            median = sapply(vars, function(p) median(data[,p], na.rm=TRUE)),
-            max = sapply(vars, function(p) max(data[,p], na.rm=TRUE)),
+            min = sapply(vars, function(p) {
+                             if (!is.numeric(data[,p])) NA
+                             else {
+                                 min(data[,p], na.rm=TRUE)
+                             }
+                         }),
+            median = sapply(vars, function(p) {
+                             if (!is.numeric(data[,p])) NA
+                             else {
+                                 median(data[,p], na.rm=TRUE)
+                             }
+                         }),
+            max = sapply(vars, function(p) {
+                             if (!is.numeric(data[,p])) NA
+                             else {
+                                 max(data[,p], na.rm=TRUE)
+                             }
+                         }),
+
             hasna  = sapply(vars, function(p) any(is.na(data[, p]))),
             notna1 = sapply(vars, function(p) sum(!is.na(data[,p][!t0]))),
             notna0 = sapply(vars, function(p) sum(!is.na(data[,p][t0]))),
-            distinct = sapply(vars, function(p) length(unique(data[,p]))),
+            distinct = sapply(vars, function(p) length(unique(data[,p])))
             ),
-        stringsAsFactor=FALSE
+        stringsAsFactors=FALSE
         )
 }
 
@@ -189,26 +208,6 @@ plotHistsForGivenEffVals <- function(nmin,
 }
 
 
-
-## ----maxminmednonex------------------------------------------------------
-
-var.entropies$max_nonec <- sapply(var.entropies$variable,
-                                  function(p){
-                                      max(removedValues(train[,p], ovl_10_00001[[p]]),
-                                          na.rm=TRUE)
-                                  })
-
-var.entropies$min_nonec <- sapply(var.entropies$variable,
-                                  function(p){
-                                      min(removedValues(train[,p], ovl_10_00001[[p]]),
-                                          na.rm=TRUE)
-                                  })
-
-var.entropies$median_nonec <- sapply(var.entropies$variable,
-                                  function(p){
-                                      median(removedValues(train[, p], ovl_10_00001[[p]]),
-                                             na.rm=TRUE)
-                                  })
 
 viewVarEnt <- function(vents=var.entropies){
     vents[, c('entropy', 'distinct_vals', 'nacount')]

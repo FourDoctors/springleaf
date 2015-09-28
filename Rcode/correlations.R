@@ -2,6 +2,16 @@
 
 removedValues <- function(xs, vs) xs[ ! xs %in% vs]
 
+noec.df <- function(df, ov=ovl_10_00001){
+    ls <- lapply(names(df), function(p) {
+                     xs <- df[,p]
+                     xs[ xs %in% ov[[p]] ] <- NA
+                     xs
+                 })
+    names(ls) <- names(df)
+    data.frame(ls, stringsAsFactors=FALSE)
+}
+
 predictor.values.counts <- function(p, data=train){
     vals <- sort(unique(data[, p]), na.last=TRUE)
     tab <- data.frame(table(data[, p], useNA='ifany'))
