@@ -1,4 +1,9 @@
 ##------------remove values------------
+entropy <- function(xs) {
+    cxs <- as.numeric(table(xs))
+    pxs <- cxs/sum(cxs)
+    - sum( pxs * log2(pxs))
+}
 
 removedValues <- function(xs, vs) xs[ ! xs %in% vs]
 
@@ -63,7 +68,7 @@ predictor.entropies <- function(vars, data=train, ovl=ovl_10_00001, useNA='no') 
 
             min.nonec = sapply(vars, function(p) min(vals.nonec(p))),
             median.nonec = sapply(vars, function(p) median(vals.nonec(p))),
-            max.nonec = sapply(vars, function(p) max(vals.nonec(p))),
+                   max.nonec = sapply(vars, function(p) max(vals.nonec(p))),
 
             distinct_vals = sapply(vars, function(p) {
                                        length(unique(data[,p], na.rm=TRUE))
@@ -216,6 +221,90 @@ plotHistsForGivenEffVals <- function(nmin,
     }
     histogram(~ value | variable, data=ml)
 }
+
+effective.vals <- function(xs) {
+    xs <- xs[!is.na(xs)]
+    cxs <- as.numeric(table(xs))
+    pxs <- cxs/sum(cxs)
+    e <- - sum( pxs * log2(pxs) )
+    2**e
+}
+
+plotHistsForGivenDistinctVals <- function(numdistinct=1,
+                                          numeffective=NULL,
+                                          from.index=1,
+                                          numplot=16,
+                                          data=train,
+                                          ovl=ovl_10_00001,
+                                          vents=var.entropies,
+                                          logscale=TRUE,
+                                          breaks=NULL,
+                                          zeroRemoved=FALSE) {
+    if(!is.null(numeffective)) {
+        vents <- vents[order(vents$num_eff_vals),]
+    } else {
+        vents <- vents[order(vents$distinct_vals),]
+    }
+    vars <- with(vents,
+                 variable[entropy > 0 &
+                              floor(distinct_vals) >= numdistinct &
+                                  datatype %in% c('integer', 'numeric')
+                          ]
+                 )
+    if (!is.null(numeffective)) {
+        vars <- Filter(function(p) vents[p, 'num_eff_vals'] >= numeffective,
+                       vars)
+    }
+    to.index <- min(from.index + numplot - 1, length(vars))
+    print(paste('plots', from.index, "to" , to.index))
+    if(to.index < from.index) {
+        print("nothing to plot")
+        return(NULL)
+    }
+    vars <- vars[from.index:to.index]
+    tdf <- noec.df(data[, vars])
+    if (zeroRemoved) {
+        tdf <- data.frame(lapply(tdf,
+                                 function(xs) {
+                                     xs[xs==0] <- NA
+                                     xs
+                                 }),
+                          stringsAsFactors=FALSE
+                          )
+    }
+    print(do.call(rbind, lapply(tdf, function(xs) {
+                                    c(min=min(xs, na.rm=TRUE),
+                                      median=median(xs, na.rm=TRUE),
+                                      max=max(xs, na.rm=TRUE),
+                                      distinct=length(unique(xs[!is.na(xs)])),
+                                      effective=effective.vals(xs)
+                                      )
+                                })
+                  )
+          )
+    names(tdf) <- paste(vars, "dis",
+                        with(vents[vars,],
+                             distinct_vals - (nacount > 0)),
+                        sep=".")
+    mdf <- melt(tdf)
+    if (logscale) mdf$value <- log10(1 + mdf$value)
+    title <- "histogram for numeric variables"
+    title <- paste( if (logscale) "log scale" else "lin scale ", title)
+    title <- paste( if (zeroRemoved) "zero removed" else "", title)
+    histogram( ~ value | variable,
+              data=mdf, type='density',
+              breaks=breaks,
+              par.settings=list(
+                  par.main.text=list(cex=1),
+                  superpose.symbol=list(cex=0.5),
+                  fontsize=list(text=8, points=4)
+                  ),
+              scales=list(par.sub.text=1),
+              main=title
+              )
+}
+
+
 
 
 
