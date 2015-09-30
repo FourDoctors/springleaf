@@ -29,7 +29,19 @@ lapply(reqdpkgs, library, character.only=TRUE)
 # Numerical or categorical variables
 
 We will decide some of the numerical variables as categorical, and use
-them for modeling.
+them for modeling. Our strategy will be to obtain two classes of
+fingerprints  of the numerical variables. The first class _ST_ will be
+statistical summaries of the variables, counting the number of
+distinct values, entropy, min, max and median,  with and without the
+error-codes and value zero.along with the histograms of. The second
+class _DP_ will count the number of log10 values of the variables in
+bins of 0, 1, ... 11.  These bins will tell us about how each variable
+is distributed.  We will then cluster these fingerprints for each
+variable, and obtain some classes. We will plot the mean values for
+each cluster to infer which ones should be numeric and which categorical.
+
+
+## Prepare the data
 
 We need the outlying values for the numerical variables, which we
 suspect to be error-codes. We create a list for all the predictors
@@ -79,72 +91,307 @@ for (p in names(ovl_10_00001)) {
      }
 
 ```
+## Numerical variables on a log scale
 
-## First model
+We have seen in the histograms that several variables are better
+characterized on a log-scale. Lets build a scheme to plot several of
+these together and browse through them,
 
-We will declare the variables with less than 10 distinct values to be
-categorical,
+```{r logscalehistos}
 
-```{r lessthan10}
+numcutoff <- 1
+pnums <- with(var.entropies,
+              variable[entropy > 0 & distinct_vals > numcutoff &
+                           (datatype == 'integer' | datatype == 'numeric')])
 
-train.model <-  train
-test.model <- test
 
-preds.model.num <- with(var.entropies,
-                        variable[ (datatype == 'numeric' |
-                                       datatype == 'integer') &
-                                     distinct_vals > 10]
-                        )
 
-preds.model.numcat <- with(var.entropies,
-                           variable[ (datatype == 'numeric' |
-                                          datatype == 'integer') &
-                                        distinct_vals <= 10]
-                           )
-preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
-preds.model.cats <- predictors_chr[ !grepl(x=predictors_chr, pattern='date')]
-preds.model.logs <- predictors_log
-
-                                        # set the dates from strings
-
-for (p in preds.model.dates) {
-    train.model[, p] <- ymd(train.model[,p])
-}
-
-for (p in preds.model.numcat) {
-    train.model[,p] <- as.factor(train.model[,p])
-}
-
-for (p in preds.model.cats) {
-    train.model[,p] <- as.factor(train.model[,p])
-}
-
-preds.model <- c(preds.model.num, preds.model.numcat,
-                 preds.model.logs, preds.model.cats)
+n <- 1
+dn <- 16
+tdf <- noec.df(train[ , pnums[n:(n+dn - 1)]])
+ns <- names(tdf)
+names(tdf) <- paste(ns,
+                    "dis",
+                    var.entropies[ns, 'distinct_vals'],
+                    sep="."
+                    )
+histogram(~ log10(1 + value) | variable,
+          data = melt(tdf),
+          type = "density",
+          par.settings = list(
+              par.main.text=list(cex=1),
+              superpose.symbol=list(cex=0.5),
+              fontsize=list(text = 8, points = 4)
+              ),
+          scales = list(par.sub.text = 1),
+          main = "log scale histogram for numeric variables"
+          )
+names(tdf) <- ns
+print(do.call(rbind, lapply(tdf, function(xs) {
+                            c(min = min(xs, na.rm=TRUE),
+                              median = median(xs, na.rm=TRUE),
+                              max = max(xs, na.rm=TRUE),
+                              distinct = length(unique(xs))
+                              )
+                        })
+                 )
+      )
 
 ```
-If try all, there will be too many variables. So we drop some
+We can use the function _plotHistsForGivenDistinctVals_, defined in
+_correlations.R_ to plot histograms. Browsing through these plots will
+give us an idea what the variables represent. For  variables with a
+few distinct values we find very descrete bars,
 
-```{r dropvars}
+```{r plotfewdistinct}
 
-keep.preds.model <- sapply(preds.model,
-                           function(p){
-                              k <- ( var.entropies[p, 'entropy'] > 0.1 &
-                                        var.entropies[p, 'nacount'] < 0.5 * nrow(train.model) )
-                              if (var.entropies[p, 'datatype'] == 'character') {
-                                  k <- k & ( var.entropies[p, 'distinct_vals'] < 100)
-                              }
-                              k
-                           })
+plotHistsForGivenDistinctVals(from.index=100, breaks=NULL)
+
+```
+
+At the other end are the _continuous_ variables, which look like
+log-normals in the plots.
+
+```{r plotmanydistinct}
+
+plotHistsForGivenDistinctVals(from.index=1700, breaks=NULL)
+
+```
+Notive the variables with a single large bar at 0 and a much smaller
+mass at larger values. When magnified by plotting the histogram with
+the 0 removed, we see again that these plots are also log-normal,
+
+```{r manydistinctzeroremoved}
+
+plotHistsForGivenDistinctVals(from.index=1700, breaks=NULL, zeroRemoved=TRUE)
+
+```
+
+We see that even the value 0 may represent some kind of an error-code
+in these data. Or may be these data represent a monthly/yearly payment
+made. In that case 0, with the highest mass, would be records that
+have not made any payment.
+
+**We should deal with the zero value of some of the variables,
+  especially the ones with many distinct values, as the value zero may
+  represent absence of something, rather than simply a numeric value
+  of zero. Furthermore, the value zero changes the shape of a nice
+  log-normalisch curve that rest of the values follow.**
 
 
-train.model$target <- as.factor(train.model$target)
-fit.rpart <- rpart(target ~ .,
-                   data = train.model[, c(preds.model[keep.preds.model], "target")],
-                   method='class'
+Between the two extremes of a few (< 10) and many valued variables ( ~
+$10^4$), are the variables with a moderate number of values ( ~ 50).
+
+```{r plotmoderatevaluedvars}
+
+plotHistsForGivenDistinctVals(from.index=1000, breaks=NULL)
+
+```
+Some have a large mass at 0, which we can remove
+
+```{r plotmoderatevaluedvarszeroremoved}
+
+plotHistsForGivenDistinctVals(from.index=1000, breaks=NULL, zeroRemoved=TRUE)
+
+```
+
+Many of these show an exponential distribution, making it harder to
+determine if these should be categorical or numeric.
+
+## Fingerprints
+
+Now, after plotting a lot of histograms, we are ready to cluster
+them. The first clustering we will do is by looking at statistical
+summaries of the variables.
+
+```{r clustervarsummaries}
+preds.clu <- predictors_num
+var.summaries <- do.call(rbind, lapply(preds.clu, function(p){
+                             xs <- train[, p]
+                             nna <- sum(is.na(xs))/nrow(train)
+                             xs <- xs[!is.na(xs)]
+                             xs.r <- removedValues(xs, ovl_10_00001[[p]])
+                             xs.z <- removedValues(xs.r, 0)
+                             c(dis=log2(length(unique(xs))),
+                               nna=nna,
+                               min=log2(min(xs)),
+                               med=log2(median(xs)),
+                               max=log2(max(xs)),
+                               ent=entropy(xs),
+                               dis.noec=log2(length(unique(xs.r))),
+                               min.noec=log2(1 + min(xs.r)),
+                               med.noec=log2(1 + median(xs.r)),
+                               max.noec=log2(1 + max(xs.r)),
+                               ent.noec=entropy(xs.r),
+                               dis.noz=log2(length(unique(xs.z))),
+                               min.noz=log2(1 + min(xs.z)),
+                               med.noz=log2(1 + median(xs.z)),
+                               max.noz=log2(1 + max(xs.z)),
+                               ent.noz=entropy(xs.z)
+                               )
+                         }))
+var.summaries[is.infinite(var.summaries)] <- NA
+row.names(var.summaries) <- preds.clu
+dist.preds <- dist(scale(var.summaries), method='euclidean')
+clu.preds <- hclust(dist.preds, method='ward')
+plot(clu.preds)
+
+```
+
+To read the clustering, we can cut the tree and look at the means of
+the summaries
+
+```{r cutsummaries}
+cutsummaries <- function(k, data=var.summaries) {
+    d <- dist(scale(data), method='euclidean')
+    clu <- hclust(d, method='ward')
+    plot(clu, labels=FALSE)
+    clucut <- cutree(clu, k=k)
+    do.call(cbind,
+            lapply(unique(clucut),
+                   function(c) colMeans(data[ clucut == c,], na.rm=TRUE)
                    )
+            )
+}
 
 ```
+Another way to cluster the variables is to bin the data for each
+predictor, into the same bins. We will store the total number of samples
+at a given bin, and get the mean values for the bins when we analyze them.
+
+```{r varfingerprints}
+
+pfs <- predictors_num
+var.fingerprints <- do.call(rbind,
+                            lapply(pfs,
+                                   function(p) {
+                                       bins <- rep(0, 12)
+                                       names(bins) = 0:11
+                                       xs <- train[, p]
+                                       xs <- xs[ xs >= 0]
+                                       xs <- xs[!is.na(xs)]
+                                       lxs <- table(floor(log10(1+xs)))
+                                       bins[names(lxs)] <- as.numeric(lxs)
+                                       bins
+                                   })
+                            )
+colnames(var.fingerprints) <- paste("dp", 0:11, sep=".")
+neg <- sapply(pfs, function(p) {
+                  sum(train[,p] < 0, na.rm=TRUE)
+              })
+var.fingerprints <- cbind(var.fingerprints, neg)
+nna <- sapply(pfs, function(p) sum(is.na(train[,p])))
+var.fingerprints <- cbind(var.fingerprints, nna)
+
+nec <- sapply(pfs, function(p) {
+                  xs <- train[,p]
+                  xs <- xs[!is.na(xs)]
+                  sum(xs %in% ovl_10_00001[[p]])
+              })
+var.fingerprints <- cbind(var.fingerprints, nec)
+var.fingerprints <- cbind(var.fingerprints, var.summaries)
+row.names(var.fingerprints) <- pfs
+
+```
+
+To use the finger-prints for clustering, we will normalize the rows by
+their means. Because, many continuous numeric variables assume a value
+zero that stands apart from rest of the log-normally distributed data,
+we will not consider the zeroes for the means. We dont have to compute
+the finger-prints for this. The linear-scale 0 remains a zero in our
+logscale ( log10(1 + xs) ).
+
+```{r fpnormed}
+
+fpfields <- colnames(var.fingerprints)
+is.dpfield <- grepl(pattern="dp", x=fpfields)
+var.fpnormed <- var.fingerprints[, fpfields[is.dpfield]]
+var.fpnormed <- var.fpnormed/rowSums(var.fpnormed)
+var.fpnormed <- cbind(var.fpnormed,
+                      var.fingerprints[, fpfields[!is.dpfield]]
+                      )
+
+dfp <- dist(scale(var.fpnormed), method='euclidean')
+cfp <- hclust(dfp, method="ward")
+plot(cfp, labels=FALSE)
+
+```r{ fpnonz}
+
+var.fpnz <- var.fingerprints[, fpfields[is.dpfield & fpfields != "dp.0"]]
+rs <- rowSums(var.fpnz)
+var.fpnz <- var.fpnz/rs
+var.fpnz[is.nan(var.fpnz)] <- 0
+var.fpnz <- cbind(var.fpnz,
+                  var.fingerprints[, fpfields[!is.dpfield]]
+                  )
+
+
+dfp <- dist(scale(var.fpnz), method='euclidean')
+cfp <- hclust(dfp, method='ward')
+plot(cfp, labels=FALSE)
+
+```
+
+We can print mean values of the bins after clustering the bin
+finger-prints.
+
+```{r fpplot}
+
+n <- 5
+cutfp <- as.data.frame(cutsummaries(n, var.fpnz))
+names(cutfp) <- paste('cluster', 1:n, sep=".")
+cutfp.dp <- cutfp[grepl(pattern="dp", x=row.names(cutfp)), ]
+cutfp.dp$size <- sapply(strsplit(row.names(cutfp.dp), split=".", fixed=TRUE),
+                        function(xs) as.numeric(xs[2]))
+
+xyplot(value ~ size, groups=variable,
+       data=melt(cutfp.dp, id.vars='size'),
+       type="b",
+       auto.key=TRUE
+       )
+
+```
+
+To grasp how the clusters are different, we can convert the cut
+summaries into a plot,
+
+```{r cutsummaryplot}
+n <- 3
+csm <- cutsummaries(n, var.fpnz)
+csm.df <- data.frame(csm)
+csm.df$fpfield <- row.names(csm)
+csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
+#csm.df$fpfield <- as.factor(csm.df$fpfield)
+csm.df$fpfield <- factor(csm.df$fpfield,
+                         levels=c(paste("dp", 1:12, sep="."),
+                             with(csm.df,
+                                  fpfield[ !grepl(pattern="dp", fpfield)])
+                                  )
+                         )
+csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
+                                          x=as.character(csm.df$fpfield))]
+csm.df$fpclass <- as.factor(csm.df$fpclass)
+csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
+
+
+ap <- xyplot(value ~ fpfield | fpclass,
+             groups=variable,
+             data=csm.df.ml,
+             auto.key=TRUE,
+             type="b",
+             scales=list(x=list(rot=90), pch=25, relation="free"),
+             )
+#print(ap)
+
+pdf(paste("figures/cutsummaryFingerPrintsK", n, ".pdf", sep=""))
+print(ap)
+dev.off()
+
+
+```
+
+
+
 
 
 

@@ -1,3 +1,4 @@
+
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(cache=FALSE)
@@ -11,7 +12,6 @@ datapath <- paste(prjpath, "data/", sep="")
 analpath <- paste(prjpath, "analysis/", sep="")
 rcodepath <- paste(analpath, "Rcode/", sep="")
 setwd(analpath)
-
 
 ```
 ```{r loadLibsAndSource, include=FALSE}
@@ -165,6 +165,192 @@ location descriptors of the rows. May be these contain a lot of
 relevant information, but will require special treatment before they
 can be deployed for prediction.**
 
+### Numerical to categorical
+
+Some of the numerical variables are best considered as categorical,
+and others as genuine continuous numerical. Which ones are which? We
+have studied this question to quite some detail in _numCat.Rmd_, and
+will use the results from there. For the following code, we assume
+that the code in _numCat.Rmd_ has been run and the variables available
+in the R environment. Some of the numerical variables seem to have a
+large mass at value 0. This makes the variable look like a categorical
+plot in the histograms, however a closer examination reveals the
+log-normal in the remaining mass of their distribution. To this end we
+will use both the fingerprints with and without value 0 for the DP
+fields.
+
+```{r cutsummaryplotWithZero}
+
+n <- 5
+csm <- cutsummaries(n, var.fpnormed)
+csm <- csm
+is.dpfield <- grepl(pattern="dp", x=row.names(csm))
+#for(i in 1:n) {
+ #   csm[, i] <- c(log10(1 + csm[ is.dpfield, i]), csm[!is.dpfield,i])
+#}
+csm.df <- data.frame(csm)
+csm.df$fpfield <- row.names(csm)
+csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
+#csm.df$fpfield <- as.factor(csm.df$fpfield)
+csm.df$fpfield <- factor(csm.df$fpfield,
+                         levels=c(paste("dp", 0:11, sep="."),
+                             with(csm.df,
+                                  fpfield[ !grepl(pattern="dp", fpfield)])
+                                  )
+                         )
+csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
+                                          x=as.character(csm.df$fpfield))]
+csm.df$fpclass <- as.factor(csm.df$fpclass)
+csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
+ap0 <- xyplot(value ~ fpfield | fpclass,
+              groups=variable,
+              data=csm.df.ml,
+              auto.key=TRUE,
+              type="b",
+              scales=list(x=list(rot=90), pch=25, relation="free"),
+              main="fingerprints for clusters, including value 0 for class DP"
+              )
+
+print(ap0)
+pdf("figures/cutsummaryFingerPrintsK5_wtZero.pdf")
+print(ap0)
+dev.off()
+
+```
+When the value zero is excluded,
+
+```{r cutsummaryplotN0}
+
+n <- 5
+csm <- cutsummaries(n, var.fpnz)
+is.dpfield <- grepl(pattern="dp", x=row.names(csm))
+#for(i in 1:n) {
+ #   csm[, i] <- c(log10(1 + csm[ is.dpfield, i]), csm[!is.dpfield,i])
+#}
+csm.df <- data.frame(csm)
+csm.df$fpfield <- row.names(csm)
+csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
+#csm.df$fpfield <- as.factor(csm.df$fpfield)
+csm.df$fpfield <- factor(csm.df$fpfield,
+                         levels=c(paste("dp", 1:11, sep="."),
+                             with(csm.df,
+                                  fpfield[ !grepl(pattern="dp", fpfield)])
+                                  )
+                         )
+csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
+                                          x=as.character(csm.df$fpfield))]
+csm.df$fpclass <- as.factor(csm.df$fpclass)
+csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
+apn0 <- xyplot(value ~ fpfield | fpclass,
+               groups=variable,
+               data=csm.df.ml,
+               auto.key=TRUE,
+               type="b",
+               scales=list(x=list(rot=90), pch=25, relation="free"),
+               main=" fingerprints for clusters, without the value 0 for class DP"
+               )
+
+print(apn0)
+pdf("figures/cutsummaryFingerPrintsK5_woZero.pdf")
+print(apn0)
+dev.off()
+
+```
+
+We considered only the normalized DP fields. We can cluster with the
+unnormalized fingerprints, which contain the actual number of samples
+in the DP bins,
+
+```{r cutsummaryplotUnnormed}
+
+n <- 7
+fpfield <- colnames(var.fingerprints)
+var.fingerprints.noz <- var.fingerprints[, fpfield != "dp.0"]
+csm <- cutsummaries(n, var.fingerprints.noz)
+is.dpfield <- grepl(pattern="dp", x=row.names(csm))
+for(i in 1:n) {
+    csm[, i] <- c(log10(1 + csm[ is.dpfield, i]), csm[!is.dpfield,i])
+}
+csm.df <- data.frame(csm)
+csm.df$fpfield <- row.names(csm)
+csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
+#csm.df$fpfield <- as.factor(csm.df$fpfield)
+csm.df$fpfield <- factor(csm.df$fpfield,
+                         levels=c(paste("dp", 1:11, sep="."),
+                             with(csm.df,
+                                  fpfield[ !grepl(pattern="dp", fpfield)])
+                                  )
+                         )
+csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
+                                          x=as.character(csm.df$fpfield))]
+csm.df$fpclass <- as.factor(csm.df$fpclass)
+csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
+apn0 <- xyplot(value ~ fpfield | fpclass,
+               groups=variable,
+               data=csm.df.ml,
+               auto.key=TRUE,
+               type="b",
+               scales=list(x=list(rot=90), pch=25, relation="free"),
+               main=" fingerprints for clusters, without the value 0 for class DP"
+               )
+
+print(apn0)
+pdf("figures/cutsummaryFingerPrintsK5_unnoremed.pdf")
+print(apn0)
+dev.off()
+
+```
+
+We have used several different criteria to obtain our clusters.
+We will use the cluster when we excluded zero values to determine the
+variable type. From the cluster summaries in the plot we see clearly that cluster 1 (X1)
+should be continuous numerical, and clusters 3 and 4
+categorical. Clusters 2 and 5 are tricky.
+
+Cluster 5 has lots of values
+between 100 and 1000, but only less than 32  (2 to the power 5)
+distinct values on the average. Their mean entropy is low
+at about 2 bits, and only increases slightly when error-codes and
+zeros are excluded.
+
+Clusters 2 may have values larger than $10^4$, and
+upto 500 distinct values ($2^9$), and entropy more than 4 bits when
+all values are included, 6 bits when error-codes are dropped, and
+jumps to 7.5 bits when zero is also dropped.
+
+To automate our observations, we can just cluster the cluster
+summaries! We will use all the summaries, or only the DP summaries.
+
+```{r cluclusum}
+
+n <- 5
+csm <- cutsummaries(n, var.fpnz)
+plot(hclust(dist(t(csm[!is.dpfield,]), method="euclidean"),
+            method="ward"),
+     main="clusters for the cluster DP summaries in var.fpnz"
+     )
+
+plot(hclust(dist(t(csm), method="euclidean"),
+            method="ward"),
+          main="clusters for the cluster summaries, both DP and ST in var.fpnz"
+     )
+
+```
+
+In either case we find that clusters 1 and 2 should go together as
+continuous numeric, and 3,4,5 group together and we will declare them
+as categorical.
+
+```{r setdatatypes}
+
+d <- dist(scale(var.fpnz), method='euclidean')
+clu <- hclust(d, method="ward")
+clucut <- cutree(clu, k=5)
+preds.model.num.cons <- rownames(var.fpnz)[clucut == 1 | clucut == 2]
+preds.model.num.cats <- rownames(var.fpnz)[clucut == 3 | clucut == 4 | clucut == 5]
+
+```
+
 We will replace NAs by unknowns, for all categorical variables.
 
 ```{r modeldataandpreds}
@@ -172,29 +358,13 @@ We will replace NAs by unknowns, for all categorical variables.
 train.model <- train
 test.model <- test
 
-numcutoff <- 10
-
-preds.model.num <- with(var.entropies,
-                        variable[ (datatype=='numeric' |
-                                       datatype=='integer') &
-                                     distinct_vals > numcutoff]
-                        )
-
-preds.model.numcat <- with(var.entropies,
-                           variable[ (datatype=='numeric' |
-                                          datatype=='integer') &
-                                        distinct_vals <= numcutoff]
-                           )
-
 preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
-
 preds.model.cats <- c('hrq', 'cbns', 'abcdefu',
                       'shrug_first', 'shrug_second', 'shrug_third',
                       'oru_first', 'oru_second', 'oru_third',
                       'eye', 'status', 'medium', 'idused')
 preds.model.jobs <- c('job_first', 'job_second')
 preds.model.locs <- c('state_first', 'state_second', 'city')
-
 preds.model.logs <- predictors_log
 
 ## set dates from strings
@@ -203,7 +373,7 @@ for(p in preds.model.dates) {
     train.model[,p] <- ymd(train.model[,p])
 }
 
-for(p in preds.model.numcat) {
+for(p in preds.model.num.cats) {
     x <- train.model[,p]
     x[is.na(x)] <- 'unknown'
     train.model[,p] <- as.factor(x)
@@ -222,6 +392,15 @@ for (p in preds.model.dates) {
     x <- as.character(year(train.model[,p]))
     x[is.na(x)] <- 'unknown'
     train.model[, py] <- as.factor(x)
+}
+
+## remove error-codes for numerical continuous vars
+
+for (p in preds.model.num.cons) {
+    xs <- train.model[, p]
+    xs[ xs%in% ovl_10_00001[[p]]] <- NA
+    xs[xs < 0] <- NA
+    train.model[,p] <- log10(1 + xs)
 }
 
 preds.model.dates.year <- paste(preds.model.dates,
@@ -251,7 +430,7 @@ If try all, there will be too many variables. So we drop some
 ```{r dropvars}
 
 preds.model <- setdiff(
-    unique(c(preds.model.num, preds.model.numcat,
+    unique(c(preds.model.num.cons, preds.model.num.cats,
              preds.model.logs, preds.model.cats,
              preds.model.dates.year)),
     c("X", "ID")
@@ -265,7 +444,6 @@ keep.preds.model <- sapply(preds.model,
                            })
 
 
-train.model$target <- as.factor(train.model$target)
 fit.rpart <- rpart(target ~ .,
                    data = train.model[, c(preds.model[keep.preds.model], "target")],
                    method='class'
@@ -275,260 +453,6 @@ fit.rpart <- rpart(target ~ .,
 
 The first model was the same as the baseline model. We will next
 consider top variables by their relative kld/entropy.
-
-
-### Numerical variables on a log scale
-
-We have seen in the histograms that several variables are better
-characterized on a log-scale. Lets build a scheme to plot several of
-these together and browse through them,
-
-```{r logscalehistos}
-
-numcutoff <- 1
-pnums <- with(var.entropies,
-              variable[entropy > 0 & distinct_vals > numcutoff &
-                           (datatype == 'integer' | datatype == 'numeric')])
-
-
-
-n <- 1
-dn <- 16
-tdf <- noec.df(train[ , pnums[n:(n+dn - 1)]])
-ns <- names(tdf)
-names(tdf) <- paste(ns,
-                    "dis",
-                    var.entropies[ns, 'distinct_vals'],
-                    sep="."
-                    )
-histogram(~ log10(1 + value) | variable,
-          data = melt(tdf),
-          type = "density",
-          par.settings = list(
-              par.main.text=list(cex=1),
-              superpose.symbol=list(cex=0.5),
-              fontsize=list(text = 8, points = 4)
-              ),
-          scales = list(par.sub.text = 1),
-          main = "log scale histogram for numeric variables"
-          )
-names(tdf) <- ns
-print(do.call(rbind, lapply(tdf, function(xs) {
-                            c(min = min(xs, na.rm=TRUE),
-                              median = median(xs, na.rm=TRUE),
-                              max = max(xs, na.rm=TRUE),
-                              distinct = length(unique(xs))
-                              )
-                        })
-                 )
-      )
-
-```
-We can use the function _plotHistsForGivenDistinctVals_, defined in
-_correlations.R_ to plot histograms. Browsing through these plots will
-give us an idea what the variables represent. For  variables with a
-few distinct values we find very descrete bars,
-
-```{r plotfewdistinct}
-
-plotHistsForGivenDistinctVals(from.index=100, breaks=NULL)
-
-```
-
-At the other end are the _continuous_ variables, which look like
-log-normals in the plots.
-
-```{r plotmanydistinct}
-
-plotHistsForGivenDistinctVals(from.index=1700, breaks=NULL)
-
-```
-Notive the variables with a single large bar at 0 and a much smaller
-mass at larger values. When magnified by plotting the histogram with
-the 0 removed, we see again that these plots are also log-normal,
-
-```{r manydistinctzeroremoved}
-
-plotHistsForGivenDistinctVals(from.index=1700, breaks=NULL, zeroRemoved=TRUE)
-
-```
-
-We see that even the value 0 may represent some kind of an error-code
-in these data. Or may be these data represent a monthly/yearly payment
-made. In that case 0, with the highest mass, would be records that
-have not made any payment.
-
-**We should deal with the zero value of some of the variables,
-  especially the ones with many distinct values, as the value zero may
-  represent absence of something, rather than simply a numeric value
-  of zero. Furthermore, the value zero changes the shape of a nice
-  log-normalisch curve that rest of the values follow.**
-
-
-Between the two extremes of a few (< 10) and many valued variables ( ~
-$10^4$), are the variables with a moderate number of values ( ~ 50).
-
-```{r plotmoderatevaluedvars}
-
-plotHistsForGivenDistinctVals(from.index=1000, breaks=NULL)
-
-```
-Some have a large mass at 0, which we can remove
-
-```{r plotmoderatevaluedvarszeroremoved}
-
-plotHistsForGivenDistinctVals(from.index=1000, breaks=NULL, zeroRemoved=TRUE)
-
-```
-
-Many of these show an exponential distribution, making it harder to
-determine if these should be categorical or numeric.
-
-## Cluster the variables
-
-Now, after plotting a lot of histograms, we are ready to cluster
-them. The first clustering we will do is by looking at statistical
-summaries of the variables.
-
-```{r clustervarsummaries}
-preds.clu <- predictors_num
-var.summaries <- do.call(rbind, lapply(preds.clu, function(p){
-                             xs <- train[, p]
-                             nna <- sum(is.na(xs))/nrow(train)
-                             xs <- xs[!is.na(xs)]
-                             xs.r <- removedValues(xs, ovl_10_00001[[p]])
-                             xs.z <- removedValues(xs.r, 0)
-                             c(dis=log2(length(unique(xs))),
-                               nna=nna,
-                               min=log2(min(xs)),
-                               med=log2(median(xs)),
-                               max=log2(max(xs)),
-                               ent=entropy(xs),
-                               dis.noec=log2(length(unique(xs.r))),
-                               min.noec=log2(1 + min(xs.r)),
-                               med.noec=log2(1 + median(xs.r)),
-                               max.noec=log2(1 + max(xs.r)),
-                               ent.noec=entropy(xs.r),
-                               dis.noz=log2(length(unique(xs.z))),
-                               min.noz=log2(1 + min(xs.z)),
-                               med.noz=log2(1 + median(xs.z)),
-                               max.noz=log2(1 + max(xs.z)),
-                               ent.noz=entropy(xs.z)
-                               )
-                         }))
-var.summaries[is.infinite(var.summaries)] <- NA
-row.names(var.summaries) <- preds.clu
-dist.preds <- dist(scale(var.summaries), method='euclidean')
-clu.preds <- hclust(dist.preds, method='ward')
-plot(clu.preds)
-
-```
-
-To read the clustering, we can cut the tree and look at the means of
-the summaries
-
-```{r cutsummaries}
-cutsummaries <- function(k, data=var.summaries) {
-    d <- dist(scale(data), method='euclidean')
-    clu <- hclust(d, method='ward')
-    plot(clu, labels=FALSE)
-    clucut <- cutree(clu, k=k)
-    do.call(cbind,
-            lapply(unique(clucut),
-                   function(c) colMeans(data[ clucut == c,], na.rm=TRUE)
-                   )
-            )
-}
-
-```
-Another way to cluster the variables is to bin the data for each
-predictor, into the same bins. We will store the total number of samples
-at a given bin, and get the mean values for the bins when we analyze them.
-
-```{r varfingerprints}
-
-pfs <- predictors_num
-var.fingerprints <- do.call(rbind,
-                            lapply(pfs,
-                                   function(p) {
-                                       bins <- rep(0, 12)
-                                       names(bins) = 0:11
-                                       xs <- train[, p]
-                                       xs <- xs[ xs >= 0]
-                                       xs <- xs[!is.na(xs)]
-                                       lxs <- table(floor(log10(1+xs)))
-                                       bins[names(lxs)] <- as.numeric(lxs)
-                                       bins
-                                   })
-                            )
-colnames(var.fingerprints) <- paste("dp", 0:11, sep=".")
-neg <- sapply(pfs, function(p) {
-                  sum(train[,p] < 0, na.rm=TRUE)
-              })
-var.fingerprints <- cbind(var.fingerprints, neg)
-nna <- sapply(pfs, function(p) sum(is.na(train[,p])))
-var.fingerprints <- cbind(var.fingerprints, nna)
-
-nec <- sapply(pfs, function(p) {
-                  xs <- train[,p]
-                  xs <- xs[!is.na(xs)]
-                  sum(xs %in% ovl_10_00001[[p]])
-              })
-var.fingerprints <- cbind(var.fingerprints, nec)
-var.fingerprints <- cbind(var.fingerprints, var.summaries)
-row.names(var.fingerprints) <- pfs
-
-```
-
-To use the finger-prints for clustering, we will normalize the rows by
-their means. Because, many continuous numeric variables assume a value
-zero that stands apart from rest of the log-normally distributed data,
-we will not consider the zeroes for the means. We dont have to compute
-the finger-prints for this. The linear-scale 0 remains a zero in our
-logscale ( log10(1 + xs) ).
-
-```r{ fpnz}
-
-fpfields <- colnames(var.fingerprints)
-is.dpfield <- grepl(pattern="dp", x=fpfields)
-var.fpnz <- var.fingerprints[, fpfields[is.dpfield]]
-rs <- rowSums(var.fpnz)
-var.fpnz <- var.fpnz/rs
-var.fpnz[is.nan(var.fpnz)] <- 0
-var.fpnz <- cbind(var.fpnz,
-                  var.fingerprints[, fpfields[!is.dpfield]]
-                  )
-
-
-dfp <- dist(scale(var.fpnz), method='euclidean')
-cfp <- hclust(dfp, method='ward')
-plot(cfp, labels=FALSE)
-
-```
-
-We can print mean values of the bins after clustering the bin
-finger-prints.
-
-```{r fpplot}
-
-n <- 5
-cutfp <- as.data.frame(cutsummaries(n, var.fpnz))
-names(cutfp) <- paste('cluster', 1:n, sep=".")
-cutfp.dp <- cutfp[grepl(pattern="dp", x=row.names(cutfp)), ]
-cutfp.dp$size <- sapply(strsplit(row.names(cutfp.dp), split=".", fixed=TRUE),
-                        function(xs) as.numeric(xs[2]))
-
-xyplot(value ~ size, groups=variable,
-       data=melt(cutfp.dp, id.vars='size'),
-       type="b",
-       auto.key=TRUE
-       )
-
-```
-
-
-
-
 
 ## Rpart 1: Use variables with high relative kld
 
