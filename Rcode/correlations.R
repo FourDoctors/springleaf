@@ -68,7 +68,7 @@ predictor.entropies <- function(vars, data=train, ovl=ovl_10_00001, useNA='no') 
 
             min.nonec = sapply(vars, function(p) min(vals.nonec(p))),
             median.nonec = sapply(vars, function(p) median(vals.nonec(p))),
-                   max.nonec = sapply(vars, function(p) max(vals.nonec(p))),
+            max.nonec = sapply(vars, function(p) max(vals.nonec(p))),
 
             distinct_vals = sapply(vars, function(p) {
                                        length(unique(data[,p], na.rm=TRUE))

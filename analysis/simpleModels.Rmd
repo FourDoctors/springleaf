@@ -341,13 +341,15 @@ In either case we find that clusters 1 and 2 should go together as
 continuous numeric, and 3,4,5 group together and we will declare them
 as categorical.
 
+Ot alternatively we can group 1,2, and 5 as continuous.
+
 ```{r setdatatypes}
 
 d <- dist(scale(var.fpnz), method='euclidean')
 clu <- hclust(d, method="ward")
 clucut <- cutree(clu, k=5)
-preds.model.num.cons <- rownames(var.fpnz)[clucut == 1 | clucut == 2]
-preds.model.num.cats <- rownames(var.fpnz)[clucut == 3 | clucut == 4 | clucut == 5]
+preds.model.num.cons <- rownames(var.fpnz)[clucut == 1 | clucut == 2 | clucut == 5]
+preds.model.num.cats <- rownames(var.fpnz)[clucut == 3 | clucut == 4]
 
 ```
 
@@ -391,7 +393,7 @@ for (p in preds.model.dates) {
     py <- paste(p, 'year', sep='.')
     x <- as.character(year(train.model[,p]))
     x[is.na(x)] <- 'unknown'
-    train.model[, py] <- as.factor(x)
+    train.model[, py] <- as.numeric(x)
 }
 
 ## remove error-codes for numerical continuous vars
@@ -429,6 +431,10 @@ If try all, there will be too many variables. So we drop some
 
 ```{r dropvars}
 
+for (p in preds.model.dates) {
+    train.model[,p] <- as.factor(train.model[,p])
+}
+
 preds.model <- setdiff(
     unique(c(preds.model.num.cons, preds.model.num.cats,
              preds.model.logs, preds.model.cats,
@@ -445,8 +451,7 @@ keep.preds.model <- sapply(preds.model,
 
 
 fit.rpart <- rpart(target ~ .,
-                   data = train.model[, c(preds.model[keep.preds.model], "target")],
-                   method='class'
+                   data = train.model[, c(preds.model[keep.preds.model], "target")]
                    )
 
 ```
