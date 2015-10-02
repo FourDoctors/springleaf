@@ -440,6 +440,7 @@ Consider a numerical variable which has many 0s. What is the
 information in its value of 0? We can measure that if we compute the
 distribution of the target over the subsets where the variable takes
 the value of 0 or not.
+
 ```{r zeroornotnumeric}
 
 N <- nrow(train)
@@ -453,9 +454,9 @@ pzs <- Filter(function(p) {
 
 prob.1.pzs <- do.call(rbind, lapply(pzs, function(p) {
                                         df <- train[, c('target', p)]
-                                        names(df) <- c('target', 'variable')
-                                        df$variable <- df$variable != 0
-                                        df$variable[ is.na(df$variable) ] <- FALSE
+                                        names(df) <- c('target', 'varval')
+                                        df$varval <- df$varval != 0
+                                        df$varval[ is.na(df$varval) ] <- TRUE
                                         tdf <- table(df)
                                         print(tdf)
                                         t(t(tdf)/colSums(tdf))[2,]
@@ -463,7 +464,7 @@ prob.1.pzs <- do.call(rbind, lapply(pzs, function(p) {
                       )
 colnames(prob.1.pzs) <- c("V0", "V1")
 prob.1.pzs <- as.data.frame(prob.1.pzs)
-prob.1.pzs$variable <- pzs
+prob.1.pzs$variable <- paste(pzs, "nz", sep=".")
 prob.1.pzs$odds.V1 <- with(prob.1.pzs, V1/(1-V1))
 prob.1.pzs$odds.V0 <- with(prob.1.pzs, V0/(1-V0))
 prob.1.pzs <- prob.1.pzs[ order(prob.1.pzs$odds.V0, prob.1.pzs$odds.V1, decreasing=TRUE),]
@@ -477,13 +478,18 @@ or not
 ```{r dataset0ornot}
 
 train.znz <- train[, pzs] != 0
-train.znz[ is.na(train.znz) ] <- FALSE
+train.znz[ is.na(train.znz) ] <- TRUE
 train.znz <- as.data.frame(train.znz)
 names(train.znz) <- sapply(names(train.znz), function(p) paste(p, 'nz', sep="."))
 
 train.znz$target <- train$target
-fit.rpart.znz <- rpart(target ~ ., data=train.znz, control=rpart.control(depth=100))
 
+fit.rpart.znz <- rpart(target ~ ., data=train.znz,
+                       control=rpart.control(depth=100, cp=0.001, minsplit=10))
+
+
+prd <- predict(fit.rpart.znz, newdata=train, method="response")
+print("our training auc for the roc", roc.auc(prd, train$target)
 
 ```
 
@@ -499,8 +505,6 @@ pecs <- Filter(function(p) {
                    sum(xs %in% ecs, na.rm=TRUE) >= q
                }, predictors_num
                )
-
-
 train.ec <- data.frame(lapply(pecs,
                               function(p) {
                                   xs <- train[,p]
@@ -511,6 +515,15 @@ train.ec <- data.frame(lapply(pecs,
                               })
                        )
 names(train.ec ) <- paste(pecs, "ec", sep=".")
+
+```
+
+```{r treeWithEC}
+
+train.ec$target <- train$target
+fit.rpart.ec <- rpart(target ~ ., data=train.ec,
+                      control=rpart.control(cp=0.001, minsplit=10, depth=100)
+                      )
 
 ```
 
