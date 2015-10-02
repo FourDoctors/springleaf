@@ -427,6 +427,99 @@ kld.allvars <- with(kld.allvars, kld.allvars[ order(kld/entropy, decreasing=TRUE
 
 ```
 
+
+## Value in Zeros, and error-codes
+
+We have noticed a large number of zeros in the data, and have
+evaluated variable summaries without them. However, for the KLD we did
+not remove these. In addition to removing them we should also look at
+the statistics if we keep them, and remove all other values. What we
+mean will be clearer when we discuss specific cases.
+
+Consider a numerical variable which has many 0s. What is the
+information in its value of 0? We can measure that if we compute the
+distribution of the target over the subsets where the variable takes
+the value of 0 or not.
+```{r zeroornotnumeric}
+
+N <- nrow(train)
+q <- 0.2
+pzs <- Filter(function(p) {
+                  nz  <- sum(train[,p] == 0, na.rm=TRUE)/N
+                  no <- sum(train[,p] != 0, na.rm=TRUE)/N
+                  nz >= q & nz < 1 - q
+              }, predictors_num
+              )
+
+prob.1.pzs <- do.call(rbind, lapply(pzs, function(p) {
+                                        df <- train[, c('target', p)]
+                                        names(df) <- c('target', 'variable')
+                                        df$variable <- df$variable != 0
+                                        df$variable[ is.na(df$variable) ] <- FALSE
+                                        tdf <- table(df)
+                                        print(tdf)
+                                        t(t(tdf)/colSums(tdf))[2,]
+                                    })
+                      )
+colnames(prob.1.pzs) <- c("V0", "V1")
+prob.1.pzs <- as.data.frame(prob.1.pzs)
+prob.1.pzs$variable <- pzs
+prob.1.pzs$odds.V1 <- with(prob.1.pzs, V1/(1-V1))
+prob.1.pzs$odds.V0 <- with(prob.1.pzs, V0/(1-V0))
+prob.1.pzs <- prob.1.pzs[ order(prob.1.pzs$odds.V0, prob.1.pzs$odds.V1, decreasing=TRUE),]
+
+
+```
+
+We can make a dataset with columns that tell us if the variable is 0
+or not
+
+```{r dataset0ornot}
+
+train.znz <- train[, pzs] != 0
+train.znz[ is.na(train.znz) ] <- FALSE
+train.znz <- as.data.frame(train.znz)
+names(train.znz) <- sapply(names(train.znz), function(p) paste(p, 'nz', sep="."))
+
+train.znz$target <- train$target
+fit.rpart.znz <- rpart(target ~ ., data=train.znz, control=rpart.control(depth=100))
+
+
+```
+
+### Error codes
+We can also create data-sets that take into account the error-codes
+
+```{r includeec}
+
+q <- 0.1
+pecs <- Filter(function(p) {
+                   xs <- train[, p]
+                   ecs <- ovl_10_00001[[p]]
+                   sum(xs %in% ecs, na.rm=TRUE) >= q
+               }, predictors_num
+               )
+
+
+train.ec <- data.frame(lapply(pecs,
+                              function(p) {
+                                  xs <- train[,p]
+                                  ecs <- ovl_10_00001[[p]]
+                                  isec <- xs %in% ecs
+                                  xs[!isec] <- 0
+                                  as.factor(xs)
+                              })
+                       )
+names(train.ec ) <- paste(pecs, "ec", sep=".")
+
+```
+
+
+
+
+
+
+## Tree Models
 If try all, there will be too many variables. So we drop some
 
 ```{r dropvars}
@@ -459,7 +552,10 @@ fit.rpart <- rpart(target ~ .,
 The first model was the same as the baseline model. We will next
 consider top variables by their relative kld/entropy.
 
-## Rpart 1: Use variables with high relative kld
+
+
+
+### Rpart 1: Use variables with high relative kld
 
 ```{r highrelativekld}
 
@@ -467,10 +563,7 @@ preds.model.1 <- with(kld.allvars, variable[ entropy > 0.5 &
                                               notna1 + notna0 > 1.4e5][1:200])
 
 
-preds.model.2 <- Filter(function(p) {
-                            with(kld.allvars[p,], distinct > 1e5 &
-                                     notna1 + notna0 > 1.4e5)
-                        },
+preds.model.2 <- Filter(function(p) kld.allvars[p, 'distinct'] > 1000 & kld.a,
                         preds.model.num
                         )
 
@@ -536,6 +629,7 @@ fit.rpart <- rpart(target ~ .,
 prp(fit.rpart, varlen=0)
 
 ```
+
 ## Logistic regression
 
 Lets first consider the numeric  variables with two distinct values. Some of
