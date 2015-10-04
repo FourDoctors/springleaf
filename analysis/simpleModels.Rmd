@@ -221,7 +221,7 @@ When the value zero is excluded,
 
 ```{r cutsummaryplotN0}
 
-n <- 5
+n <- 10
 csm <- cutsummaries(n, var.fpnz)
 is.dpfield <- grepl(pattern="dp", x=row.names(csm))
 #for(i in 1:n) {
@@ -249,8 +249,8 @@ apn0 <- xyplot(value ~ fpfield | fpclass,
                scales=list(x=list(rot=90), pch=25, relation="free"),
                main=" fingerprints for clusters, without the value 0 for class DP"
                )
-
 print(apn0)
+
 pdf("figures/cutsummaryFingerPrintsK5_woZero.pdf")
 print(apn0)
 dev.off()
@@ -293,8 +293,8 @@ apn0 <- xyplot(value ~ fpfield | fpclass,
                scales=list(x=list(rot=90), pch=25, relation="free"),
                main=" fingerprints for clusters, without the value 0 for class DP"
                )
-
 print(apn0)
+
 pdf("figures/cutsummaryFingerPrintsK5_unnoremed.pdf")
 print(apn0)
 dev.off()

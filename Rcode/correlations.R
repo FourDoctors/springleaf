@@ -1,21 +1,39 @@
 ##------------remove values------------
-entropy <- function(xs) {
-    cxs <- as.numeric(table(xs))
+
+entropy.natural <- function(xs, exclude=NULL) {
+    cxs <- as.numeric(table(xs, exclude=exclude))
+    cxs <- cxs[ cxs > 0]
+    pxs <- cxs/sum(cxs)
+    - sum( pxs * log(pxs))
+}
+
+entropy.bits <- function(xs, exclude=NULL) {
+    cxs <- as.numeric(table(xs, exclude=exclude))
+    cxs <- cxs[ cxs > 0]
     pxs <- cxs/sum(cxs)
     - sum( pxs * log2(pxs))
 }
 
-removedValues <- function(xs, vs) xs[ ! xs %in% vs]
-
-noec.df <- function(df, ov=ovl_10_00001){
-    ls <- lapply(names(df), function(p) {
-                     xs <- df[,p]
-                     xs[ xs %in% ov[[p]] ] <- NA
-                     xs
-                 })
-    names(ls) <- names(df)
-    data.frame(ls, stringsAsFactors=FALSE)
+entropy <- function(xs, exclude=NULL, scale=2) {
+    if (scale==2) entropy.bits(xs, exclude)
+    else entropy.natural(xs, exclude)/log(scale)
 }
+
+
+num.effective.vals <- function(xs, exclude=NULL) {
+    exp(entropy.natural(xs, exclude))
+}
+
+remove.values <- function(xs, vs) xs[ ! xs %in% vs]
+
+removedValues <- remove.values
+
+df.value.replaced <- function(df, value, replacement=NA) {
+    df[ df == value] <- replacement
+    df
+}
+
+noec.df <- df.ec.replaced
 
 predictor.values.counts <- function(p, data=train){
     vals <- sort(unique(data[, p]), na.last=TRUE)

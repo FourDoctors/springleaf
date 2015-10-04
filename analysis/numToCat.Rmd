@@ -163,7 +163,7 @@ the 0 removed, we see again that these plots are also log-normal,
 
 ```{r manydistinctzeroremoved}
 
-plotHistsForGivenDistinctVals(from.index=1700, breaks=NULL, zeroRemoved=TRUE)
+plotHistsForGivenDistinctVals(from.index=1700, breaks=NULL, zero.excluded=TRUE)
 
 ```
 
@@ -232,9 +232,10 @@ var.summaries <- do.call(rbind, lapply(preds.clu, function(p){
                          }))
 var.summaries[is.infinite(var.summaries)] <- NA
 row.names(var.summaries) <- preds.clu
+
 dist.preds <- dist(scale(var.summaries), method='euclidean')
 clu.preds <- hclust(dist.preds, method='ward')
-plot(clu.preds)
+plot(clu.preds, labels=FALSE)
 
 ```
 
@@ -242,6 +243,7 @@ To read the clustering, we can cut the tree and look at the means of
 the summaries
 
 ```{r cutsummaries}
+
 cutsummaries <- function(k, data=var.summaries) {
     d <- dist(scale(data), method='euclidean')
     clu <- hclust(d, method='ward')
