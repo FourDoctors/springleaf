@@ -358,32 +358,37 @@ To grasp how the clusters are different, we can convert the cut
 summaries into a plot,
 
 ```{r cutsummaryplot}
+
 n <- 3
-csm <- cutsummaries(n, var.fpnz)
-csm.df <- data.frame(csm)
-csm.df$fpfield <- row.names(csm)
-csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
-#csm.df$fpfield <- as.factor(csm.df$fpfield)
-csm.df$fpfield <- factor(csm.df$fpfield,
-                         levels=c(paste("dp", 1:12, sep="."),
-                             with(csm.df,
-                                  fpfield[ !grepl(pattern="dp", fpfield)])
-                                  )
-                         )
-csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
-                                          x=as.character(csm.df$fpfield))]
-csm.df$fpclass <- as.factor(csm.df$fpclass)
-csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
+hclu <- hclust(dist(var.dpzo, method='euclidean'), method='ward')
+clucut <- cutree(hclu, k=n)
+print(table(clucut))
+csm <- summary.cluster.cut(clucut, data=var.fpnormed)
+ap <- plotFPsummaries(csm)
+print(ap)
 
-
-ap <- xyplot(value ~ fpfield | fpclass,
-             groups=variable,
-             data=csm.df.ml,
-             auto.key=TRUE,
-             type="b",
-             scales=list(x=list(rot=90), pch=25, relation="free"),
-             )
-#print(ap)
+print(do.call(cbind,
+        lapply(unique(clucut),
+               function(n) {
+                   c(mean.ent=mean(var.fpnormed[clucut==n, 'ent']),
+                     sd.ent=sd(var.fpnormed[clucut==n, 'ent']),
+                     median.ent=median(var.fpnormed[clucut==n, 'ent']),
+                     min.ent=min(var.fpnormed[clucut==n, 'ent']),
+                     max.ent=max(var.fpnormed[clucut==n, 'ent']),
+                     mean.ent.noec=mean(var.fpnormed[clucut==n, 'ent.noec']),
+                     sd.ent.noec=sd(var.fpnormed[clucut==n, 'ent.noec']),
+                     median.ent.noec=median(var.fpnormed[clucut==n, 'ent.noec']),
+                     min.ent.noec=min(var.fpnormed[clucut==n, 'ent.noec']),
+                     max.ent.noec=max(var.fpnormed[clucut==n, 'ent.noec']),
+                     mean.ent.noz=mean(var.fpnormed[clucut==n, 'ent.noz']),
+                     sd.ent.noz=sd(var.fpnormed[clucut==n, 'ent.noz']),
+                     median.ent.noz=median(var.fpnormed[clucut==n, 'ent.noz']),
+                     min.ent.noz=min(var.fpnormed[clucut==n, 'ent.noz']),
+                     max.ent.noz=max(var.fpnormed[clucut==n, 'ent.noz'])
+                     )
+               })
+              )
+      )
 
 pdf(paste("figures/cutsummaryFingerPrintsK", n, ".pdf", sep=""))
 print(ap)

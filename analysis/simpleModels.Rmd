@@ -1,4 +1,5 @@
 
+
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(cache=FALSE)
@@ -14,11 +15,13 @@ rcodepath <- paste(analpath, "Rcode/", sep="")
 setwd(analpath)
 
 ```
+
+
 ```{r loadLibsAndSource, include=FALSE}
 
 reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
               "plyr",  "lubridate", "Hmisc", "corrplot",
-              "rpart", "rpart.plot", "RWeka",
+              "rpart", "rpart.plot", "rattle", "RWeka",
               "caret", "gbm", "randomForest")
 lapply(reqdpkgs, library, character.only=TRUE)
 
@@ -103,6 +106,9 @@ _errorCodes.R_ which has been extracted from the Rmd _errorCodes.Rmd_,
 
 source("../Rcode/errorCodes.R")
 source("../Rcode/correlations.R")
+source("../Rcode/numToCat.R")
+source("../Rcode/huffman.r")
+source("../Rcode/discreteEncoded.R")
 
 ```
 
@@ -179,186 +185,232 @@ log-normal in the remaining mass of their distribution. To this end we
 will use both the fingerprints with and without value 0 for the DP
 fields.
 
-```{r cutsummaryplotWithZero}
-
-n <- 5
-csm <- cutsummaries(n, var.fpnormed)
-csm <- csm
-is.dpfield <- grepl(pattern="dp", x=row.names(csm))
-#for(i in 1:n) {
- #   csm[, i] <- c(log10(1 + csm[ is.dpfield, i]), csm[!is.dpfield,i])
-#}
-csm.df <- data.frame(csm)
-csm.df$fpfield <- row.names(csm)
-csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
-#csm.df$fpfield <- as.factor(csm.df$fpfield)
-csm.df$fpfield <- factor(csm.df$fpfield,
-                         levels=c(paste("dp", 0:11, sep="."),
-                             with(csm.df,
-                                  fpfield[ !grepl(pattern="dp", fpfield)])
-                                  )
-                         )
-csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
-                                          x=as.character(csm.df$fpfield))]
-csm.df$fpclass <- as.factor(csm.df$fpclass)
-csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
-ap0 <- xyplot(value ~ fpfield | fpclass,
-              groups=variable,
-              data=csm.df.ml,
-              auto.key=TRUE,
-              type="b",
-              scales=list(x=list(rot=90), pch=25, relation="free"),
-              main="fingerprints for clusters, including value 0 for class DP"
-              )
-
-print(ap0)
-pdf("figures/cutsummaryFingerPrintsK5_wtZero.pdf")
-print(ap0)
-dev.off()
-
-```
 When the value zero is excluded,
 
-```{r cutsummaryplotN0}
+```{r cutsummaryplot}
 
-n <- 10
-csm <- cutsummaries(n, var.fpnz)
-is.dpfield <- grepl(pattern="dp", x=row.names(csm))
-#for(i in 1:n) {
- #   csm[, i] <- c(log10(1 + csm[ is.dpfield, i]), csm[!is.dpfield,i])
-#}
-csm.df <- data.frame(csm)
-csm.df$fpfield <- row.names(csm)
-csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
-#csm.df$fpfield <- as.factor(csm.df$fpfield)
-csm.df$fpfield <- factor(csm.df$fpfield,
-                         levels=c(paste("dp", 1:11, sep="."),
-                             with(csm.df,
-                                  fpfield[ !grepl(pattern="dp", fpfield)])
-                                  )
-                         )
-csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
-                                          x=as.character(csm.df$fpfield))]
-csm.df$fpclass <- as.factor(csm.df$fpclass)
-csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
-apn0 <- xyplot(value ~ fpfield | fpclass,
-               groups=variable,
-               data=csm.df.ml,
-               auto.key=TRUE,
-               type="b",
-               scales=list(x=list(rot=90), pch=25, relation="free"),
-               main=" fingerprints for clusters, without the value 0 for class DP"
-               )
-print(apn0)
-
-pdf("figures/cutsummaryFingerPrintsK5_woZero.pdf")
-print(apn0)
+n <- 3
+hc.dp <- hclust(dist(scale(var.dpnz), method='euclidean'), method='ward')
+hc.fp <- hclust(dist(scale(var.fpnz), method='euclidean'), method='ward')
+clucut.dp <- cutree(hc.dp, k=n)
+clucut.fp <- cutree(hc.fp, k=n)
+apnd <- plotFPsummaries(summary.cluster.cut(clucut.dp,
+                                            data=var.fpnormed)
+                        )
+apnf <- plotFPsummaries(summary.cluster.cut(clucut.fp,
+                                            data=var.fpnormed)
+                        )
+print(apnd)
+pdf("figures/cutsummaryDecimalPrintsK3_woZero.pdf")
+print(apnd)
 dev.off()
+pdf("figures/cutsummaryFingerPrintsK3_woZero.pdf")
+print(apnf)
+dev.off()
+
+
 
 ```
 
-We considered only the normalized DP fields. We can cluster with the
-unnormalized fingerprints, which contain the actual number of samples
-in the DP bins,
+```{r cluents}
 
-```{r cutsummaryplotUnnormed}
+pnums <- row.names(var.fpnz)
+cluents <- data.frame(
+    list(
+        predictor = pnums,
+        clufp = clucut.fp,
+        cludp = clucut.dp,
+        entropy.noz = var.fpnormed[pnums, 'ent.noz'],
+        entropy = var.fpnormed[pnums, 'ent'],
+        distinct = var.fpnormed[pnums, 'dis'],
+        num.zeros = sapply(pnums, function(p) sum(train[,p] == 0, na.rm=TRUE)),
+        num.ecs = sapply(pnums, function(p) {
+                             xs <- train[,p]
+                             sum( xs %in% ovl_10_00001[[p]], na.rm=TRUE)
+                         })
+        ),
+    stringsAsFactors=FALSE
+    )
 
-n <- 7
-fpfield <- colnames(var.fingerprints)
-var.fingerprints.noz <- var.fingerprints[, fpfield != "dp.0"]
-csm <- cutsummaries(n, var.fingerprints.noz)
-is.dpfield <- grepl(pattern="dp", x=row.names(csm))
-for(i in 1:n) {
-    csm[, i] <- c(log10(1 + csm[ is.dpfield, i]), csm[!is.dpfield,i])
-}
-csm.df <- data.frame(csm)
-csm.df$fpfield <- row.names(csm)
-csm.df <- subset(csm.df, !(fpfield %in% c("nna", "nec", "neg")))
-#csm.df$fpfield <- as.factor(csm.df$fpfield)
-csm.df$fpfield <- factor(csm.df$fpfield,
-                         levels=c(paste("dp", 1:11, sep="."),
-                             with(csm.df,
-                                  fpfield[ !grepl(pattern="dp", fpfield)])
-                                  )
-                         )
-csm.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
-                                          x=as.character(csm.df$fpfield))]
-csm.df$fpclass <- as.factor(csm.df$fpclass)
-csm.df.ml <- melt(csm.df, id.vars=c("fpfield", "fpclass"))
-apn0 <- xyplot(value ~ fpfield | fpclass,
-               groups=variable,
-               data=csm.df.ml,
-               auto.key=TRUE,
-               type="b",
-               scales=list(x=list(rot=90), pch=25, relation="free"),
-               main=" fingerprints for clusters, without the value 0 for class DP"
-               )
-print(apn0)
 
-pdf("figures/cutsummaryFingerPrintsK5_unnoremed.pdf")
-print(apn0)
-dev.off()
+cluents.ml <- melt(cluents,
+                   id.vars=c("predictor", "clufp", "cludp")
+                   )
+
+histogram(~ value | as.factor(clufp),
+          data=subset(cluents.ml, variable=='entropy.noz'),
+          main='entropy no zeros')
+
+histogram(~ value | as.factor(clufp),
+          data=subset(cluents.ml, variable=='distinct'),
+          main='distinct')
+
+histogram(~ value | as.factor(clufp),
+          data=subset(cluents.ml, variable=='num.zeros'),
+          main='number of zeros')
+
+histogram(~ value | as.factor(clufp),
+          data=subset(cluents.ml, variable=='num.ecs'),
+          main='number of error codes')
 
 ```
 
 We have used several different criteria to obtain our clusters.
 We will use the cluster when we excluded zero values to determine the
-variable type. From the cluster summaries in the plot we see clearly that cluster 1 (X1)
-should be continuous numerical, and clusters 3 and 4
-categorical. Clusters 2 and 5 are tricky.
+variable type. Clustering into 3 groups, not using the 0 values
+clearly shows the numeric variables in cluster 1 (X1). Cluster 3 looks
+the most discrete of all, however not all the variables in there are
+discrete. Some of them have a large number of values.
 
-Cluster 5 has lots of values
-between 100 and 1000, but only less than 32  (2 to the power 5)
-distinct values on the average. Their mean entropy is low
-at about 2 bits, and only increases slightly when error-codes and
-zeros are excluded.
+We will go ahead with clusters 1 and 2 as legit numeric variables. We
+will further group the variables in cluster 3, by their
+entropy. Variables with entropies (after removing the error-codes and
+zero) less than 4 bits will be converted to discrete categorical.
 
-Clusters 2 may have values larger than $10^4$, and
-upto 500 distinct values ($2^9$), and entropy more than 4 bits when
-all values are included, 6 bits when error-codes are dropped, and
-jumps to 7.5 bits when zero is also dropped.
+We have noticed a large number of zeros in the data. Value 0 seems to
+represent information different from the other values. For example, if
+the variable represents monthly payments on a loan, the value of would
+mean that there was no such loan in the first place. So we will
+create new variables to hold this information.
 
-To automate our observations, we can just cluster the cluster
-summaries! We will use all the summaries, or only the DP summaries.
+```{r wherezero}
 
-```{r cluclusum}
+not.zero <- function(xs, fill.na=TRUE) {
+    ys <- xs != 0
+    ys[is.na(ys)] <- fill.na
+    ys
+}
 
-n <- 5
-csm <- cutsummaries(n, var.fpnz)
-plot(hclust(dist(t(csm[!is.dpfield,]), method="euclidean"),
-            method="ward"),
-     main="clusters for the cluster DP summaries in var.fpnz"
-     )
+```
+We copy the data before creating new variables in it,
 
-plot(hclust(dist(t(csm), method="euclidean"),
-            method="ward"),
-          main="clusters for the cluster summaries, both DP and ST in var.fpnz"
-     )
+```{r copydata}
+
+train.model <- train
+test.model <- test
 
 ```
 
-In either case we find that clusters 1 and 2 should go together as
-continuous numeric, and 3,4,5 group together and we will declare them
-as categorical.
+We create lists of groups of variables , and some new variables.
 
-Ot alternatively we can group 1,2, and 5 as continuous.
+```{r setnumdatatypes}
 
-```{r setdatatypes}
-
+elarge <- 4
+max.loss <- 1
 d <- dist(scale(var.fpnz), method='euclidean')
 clu <- hclust(d, method="ward")
-clucut <- cutree(clu, k=5)
-preds.model.num.cons <- rownames(var.fpnz)[clucut == 1 | clucut == 2 | clucut == 5]
-preds.model.num.cats <- rownames(var.fpnz)[clucut == 3 | clucut == 4]
+clucut <- cutree(clu, k=3)
+preds.num <- setdiff(cluents$predictor, c("X", "ID"))
+preds.num.X1 <- with(cluents, predictor[clufp == 1])
+preds.num.X2 <- with(cluents, predictor[clufp == 2])
+preds.num.X3 <- with(cluents, predictor[clufp == 3])
+
+preds.num.X3.cats <- with(cluents,
+                         predictor[clufp == 3 &
+                                       entropy.noz <= elarge]
+                         )
+preds.num.X3.cons <- with(cluents,
+                          predictor[clufp == 3 &
+                                        entropy.noz > elarge]
+                          )
+
+preds.num.nz <- paste(preds.num, 'nz', sep='.')
+train.model.num.nz <- data.frame(lapply(train[, preds.num],
+                                          function(xs) not.zero(xs)
+                                          ),
+                                   stringsAsFactors=FALSE
+                                   )
+names(train.model.num.nz) <- paste(preds.num, 'nz', sep='.')
+
+
+train.model.num.ec <- data.frame(lapply(preds.num,
+                                        function(p) {
+                                            xs <- train[, p]
+                                            ecs <- ovl_10_00001[[p]]
+                                            cxs <- as.character(xs)
+                                            cxs[ !(xs %in% ecs)] <- "nec"
+                                            print(paste("ec var", p,
+                                                        "number ecs",
+                                                        length(ecs))
+                                                  )
+                                            as.factor(cxs)
+                                        }
+                                        )
+                                 )
+names(train.model.num.ec) <- paste(preds.num, "ec", sep=".")
+
+train.model.num.X1.ls <- data.frame(
+    lapply(preds.num.X1,
+           function(p) {
+               xs <- train[, p]
+               xs[xs %in% ovl_10_00001[[p]]] <- NA
+               xs[ xs <= 0] <- NA
+               log10(1 + xs)
+           }),
+    stringsAsFactors = FALSE
+    )
+names(train.model.num.X1.ls) <- paste(preds.num.X1, 'ls', sep='.')
+
+train.model.num.X2.ls <- data.frame(
+    lapply(preds.num.X2,
+           function(p) {
+               xs <- train[, p]
+               xs[xs %in% ovl_10_00001[[p]]] <- NA
+               xs[xs <= 0] <- NA
+               log10(1 + xs)
+           }),
+    stringsAsFactors = FALSE
+    )
+names(train.model.num.X2.ls) <- paste(preds.num.X2, 'ls', sep='.')
+
+train.model.num.X3.cons.ls <- data.frame(
+    lapply(preds.num.X3.cons,
+           function(p) {
+               xs <- train[, p]
+               xs[xs %in% ovl_10_00001[[p]]] <- NA
+               xs[xs <= 0] <- NA
+               log10(1 + xs)
+           }),
+    stringsAsFactors = FALSE
+    )
+names(train.model.num.X3.cons.ls) <- paste(preds.num.X3.cons, 'ls', sep='.')
+
+max.loss <- 0.1
+train.model.num.X3.cats.hc <- data.frame(
+    lapply(train.model[, preds.num.X3.cats],
+           function(xs) {
+               hxs <- huffman.encoded(xs, max.loss=max.loss)
+               print(paste("encoding ",
+                           "entropy",
+                           entropy(xs), "-->", entropy(hxs)
+                           )
+                     )
+               hxs
+           })
+    )
+names(train.model.num.X3.cats.hc) <- paste(preds.num.X3.cats,
+                                                 'hc', sep=".")
+
+```
+
+All the work that treating numerical variables did, should be saved
+
+```{r savenumvardata}
+
+train.model.num.treated <- cbind(
+    train.model.num.X1.ls,
+    train.model.num.X2.ls,
+    train.model.num.X3.cons.ls,
+    train.model.num.X3.cats.hc,
+    train.model.num.nz,
+    train.model.num.ec
+    )
 
 ```
 
 We will replace NAs by unknowns, for all categorical variables.
 
 ```{r modeldataandpreds}
-
-train.model <- train
-test.model <- test
 
 preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
 preds.model.cats <- c('hrq', 'cbns', 'abcdefu',
@@ -371,67 +423,111 @@ preds.model.logs <- predictors_log
 
 ## set dates from strings
 
-for(p in preds.model.dates) {
-    train.model[,p] <- ymd(train.model[,p])
-}
+train.model.date <- data.frame(
+    lapply(train.model[, preds.model.dates],
+           function(xs) ymd(xs))
+    )
 
-for(p in preds.model.num.cats) {
-    x <- train.model[,p]
-    x[is.na(x)] <- 'unknown'
-    train.model[,p] <- as.factor(x)
-}
+train.model.date.year <- data.frame(
+    lapply(train.model.date,
+           function(xs) {
+               ys <- as.character(year(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+           })
+    )
+names(train.model.date.year) <- paste(preds.model.dates,
+                                      'year', sep='.')
 
-for (p in preds.model.cats) {
-    x <- train.model[,p]
-    x[is.na(x)] <- 'unknown'
-    train.model[,p] <- as.factor(x)
-}
+train.model.cat <- data.frame(
+    lapply(train[, preds.model.cats],
+           function(xs) {
+               xs[is.na(xs)] <- 'unknown'
+               as.factor(xs)
+           })
+    )
 
-## year of date as a factor
+train.model.log <- train[, preds.model.logs]
+train.model.loc <- train[, preds.model.locs]
+train.model.job <- train[, preds.model.jobs]
 
-for (p in preds.model.dates) {
-    py <- paste(p, 'year', sep='.')
-    x <- as.character(year(train.model[,p]))
-    x[is.na(x)] <- 'unknown'
-    train.model[, py] <- as.numeric(x)
-}
+train.model.state <- data.frame(
+    lapply(train[, c('state_first', 'state_second')],
+           function(xs) as.factor(xs)
+           )
+    )
 
-## remove error-codes for numerical continuous vars
+train.model.hasjob <- data.frame(
+    hasjob = train$job_first != "-1" |
+        train$job_second != "-1"
+    )
 
-for (p in preds.model.num.cons) {
-    xs <- train.model[, p]
-    xs[ xs%in% ovl_10_00001[[p]]] <- NA
-    xs[xs < 0] <- NA
-    train.model[,p] <- log10(1 + xs)
-}
-
-preds.model.dates.year <- paste(preds.model.dates,
-                                'year', sep='.')
-
-```
-
-Now that we added new columns as years of the dates, we need to add
-these to the dateframes for variable properties.
-
-```{r yeartovarents}
-
-var.entropies.year <- predictor.entropies(preds.model.dates.year,
-                                           data=train.model)
-
-var.entropies <- rbind(var.entropies, var.entropies.year[, names(var.entropies)])
-
-kld.allvars <- kld.vars(predictors, data=train)
-kld.years <- kld.vars(preds.model.dates.year, data=train.model)
-kld.allvars <- rbind(kld.allvars, kld.years)
-kld.allvars <- with(kld.allvars, kld.allvars[ order(kld/entropy, decreasing=TRUE), ])
+train.model.non_num.treated <- cbind(
+    train.model.date.year,
+    train.model.cat,
+    train.model.log,
+    train.model.state,
+    train.model.hasjob
+    )
 
 ```
 
+### Filters on the data,
 
-## Value in Zeros, and error-codes
+We do not want variables with zero entropy, or those that have too
+many NAs. We also want to filter correlated variables, and perform PCA
+on some.
 
-We have noticed a large number of zeros in the data, and have
-evaluated variable summaries without them. However, for the KLD we did
+```{r varfilters}
+
+filteredVariables <- function(data,
+                              min.entropy=NULL,
+                              max.na.fraction=NULL,
+                              min.correlation=NULL,
+                              min.kld=NULL,
+                              target=NULL,
+                              target.label0=0,
+                              target.label1=1) {
+    ##first filters will be on entropy and NAs
+    predictors <- names(data)
+    filter.entropy <- if(!is.null(min.entropy)) {
+        sapply(predictors,
+               function(p) entropy(data[, p]) >= min.entropy
+               )
+    } else {
+        rep(TRUE, length(predictors))
+    }
+    filter.na <- if(!is.null(max.na.fraction)) {
+        sapply(predictors,
+               function(p) mean(is.na(data[, p])) <= max.na.fraction
+               )
+    } else {
+        rep(TRUE, length(predictors))
+    }
+    filter.kld <- if(!is.null(min.kld)) {
+        sapply(predictors,
+               function(p) {
+                   xs <- data[, p]
+                   xs.0 <- xs[target==target.label0]
+                   xs.1 <- xs[target==target.label1]
+                   xs.0 <- xs.0[!is.na(xs.0)]
+                   xs.1 <- xs.1[!is.na(xs.1)]
+                   kld(xs.0, xs.1, asymm=FALSE) >= min.kld
+               })
+    } else {
+        rep(TRUE, length(predictors))
+    }
+    filter.correlation <- rep(TRUE, length(predictors))
+
+    predictors[filter.entropy &
+                   filter.na &
+                       filter.kld &
+                           filter.correlation]
+}
+
+### Value in Zeros, and error-codes
+
+ However, for the KLD we did
 not remove these. In addition to removing them we should also look at
 the statistics if we keep them, and remove all other values. What we
 mean will be clearer when we discuss specific cases.
@@ -467,7 +563,9 @@ prob.1.pzs <- as.data.frame(prob.1.pzs)
 prob.1.pzs$variable <- paste(pzs, "nz", sep=".")
 prob.1.pzs$odds.V1 <- with(prob.1.pzs, V1/(1-V1))
 prob.1.pzs$odds.V0 <- with(prob.1.pzs, V0/(1-V0))
-prob.1.pzs <- prob.1.pzs[ order(prob.1.pzs$odds.V0, prob.1.pzs$odds.V1, decreasing=TRUE),]
+prob.1.pzs <- prob.1.pzs[ order(prob.1.pzs$odds.V0,
+                                prob.1.pzs$odds.V1,
+                                decreasing=TRUE),]
 
 
 ```
@@ -527,6 +625,22 @@ fit.rpart.ec <- rpart(target ~ ., data=train.ec,
 
 ```
 
+Now that we added new columns as years of the dates, we need to add
+these to the dateframes for variable properties.
+
+```{r yeartovarents}
+
+var.entropies.year <- predictor.entropies(preds.model.dates.year,
+                                           data=train.model)
+
+var.entropies <- rbind(var.entropies, var.entropies.year[, names(var.entropies)])
+
+kld.allvars <- kld.vars(predictors, data=train)
+kld.years <- kld.vars(preds.model.dates.year, data=train.model)
+kld.allvars <- rbind(kld.allvars, kld.years)
+kld.allvars <- with(kld.allvars, kld.allvars[ order(kld/entropy, decreasing=TRUE), ])
+
+```
 
 
 

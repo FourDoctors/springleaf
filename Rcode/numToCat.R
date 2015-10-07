@@ -99,9 +99,12 @@ plotHistsForGivenDistinctVals <- function(num.distinct=1,
                                           data=train,
                                           ec.lists=ovl_10_00001,
                                           vstats=var.entropies,
+                                          varset=names(train),
                                           logscale=TRUE,
                                           breaks=NULL,
                                           zero.excluded=FALSE) {
+    data <- data[, varset]
+    vstats <- vstats[varset,]
     if (!is.null(num.effective)) {
         vstats <- vstats[order(vstats$num_eff_vals),]
     } else {
@@ -126,8 +129,9 @@ plotHistsForGivenDistinctVals <- function(num.distinct=1,
         print(paste("plotting from index", from.index, "to", to.index))
     }
     vars <- vars[from.index:to.index]
-    print(head(vars))
+    print(vars)
     tdf <- df.ec.replaced(data[, vars], ec.lists)
+    print(names(tdf))
     if(zero.excluded) {
         tdf <- df.value.replaced(tdf, 0, NA)
     }
@@ -207,17 +211,55 @@ variable.summaries <- function(data, variables){
 
 ## ----cutsummaries--------------------------------------------------------
 
+summary.cluster.cut <- function(clucut, data=var.summaries) {
+    do.call(cbind,
+            lapply(unique(clucut),
+                   function(c) {
+                       colMeans(data[clucut == c,],
+                                na.rm=TRUE)
+                   })
+            )
+}
+
+
 cutsummaries <- function(k, data=var.summaries) {
     d <- dist(scale(data), method='euclidean')
     clu <- hclust(d, method='ward')
     plot(clu, labels=FALSE)
     clucut <- cutree(clu, k=k)
-    do.call(cbind,
-            lapply(unique(clucut),
-                   function(c) colMeans(data[ clucut == c,], na.rm=TRUE)
-                   )
-            )
+    summary.cluster.cut(clucut, data)
 }
+
+plotFPsummaries <- function(csum, dmax=12, PLOT=TRUE, logscale=FALSE) {
+    is.dpfield <- grepl(pattern = "dp", x=row.names(csum))
+    csum.df <- data.frame(csum)
+    csum.df$fpfield <- row.names(csum)
+    csum.df <- subset(csum.df, !(fpfield %in% c("nna", "nec", "neg")))
+    csum.df$fpclass <- c("ST", "DP")[1 + grepl(pattern="dp",
+                                              x=as.character(csum.df$fpfield))]
+
+    nonfpfields <-  with(csum.df, fpfield[!grepl(pattern="dp", fpfield)])
+    dpfield.names <- c(paste("dp", 0:(dmax-1), sep="."))
+    csum.df$fpfield <- factor(csum.df$fpfield,
+                              levels=c(dpfield.names, nonfpfields))
+
+    csum.df$fpclass <- as.factor(csum.df$fpclass)
+    csum.df.ml <- melt(csum.df, id.vars=c("fpclass", "fpfield"))
+    if (logscale) {
+        csum.df.ml$value <- log10( csum.df.ml$value)
+    }
+    ap <- xyplot(value ~ fpfield | fpclass,
+                 groups=variable,
+                 data=csum.df.ml,
+                 auto.key=TRUE,
+                 type="b",
+                 scales=list(x=list(rot=90), pch=25, relation="free"),
+                 main="Fingerprints for clusters"
+                 )
+    if(PLOT) print(ap)
+    ap
+}
+
 
 
 ## ----varfingerprints-----------------------------------------------------
