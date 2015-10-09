@@ -14,7 +14,7 @@ entropy.bits <- function(xs, exclude=NULL) {
     - sum( pxs * log2(pxs))
 }
 
-entropy <- function(xs, exclude=NULL, scale=2) {
+entropy <- function(xs, exclude=NULL, scale=2, na.rm=FALSE) {
     if (scale==2) entropy.bits(xs, exclude)
     else entropy.natural(xs, exclude)/log(scale)
 }
@@ -64,33 +64,42 @@ predictor.values <- function(vars, n, data=train) {
     df
 }
 
-predictor.entropies <- function(vars, data=train, ovl=ovl_10_00001, useNA='no') {
+predictor.entropies <- function(vars,
+                                data=train,
+                                ovl=ovl_10_00001,
+                                useNA='no',
+                                with.ec=FALSE) {
     vals.nonec <- function(p) {
         xs <- data[,p]
-        vs <- ovl[[p]]
+        if(!(p %in% names(ovl))) {
+            p <- strsplit(p, split=".", fixed=TRUE)[[1]]
+            if (p %in% names(ovl)) {
+                vs <- ovl[[p]]
+            } else {
+                vs <- c()
+            }
+        } else {
+            vs <- ovl[[p]]
+        }
         xs[ !(xs %in% vs) ]
     }
-
+    compute.statistic <- function(p, statistic.function, nonec=FALSE) {
+        xs <- if (nonec) vals.nonec(p) else data[,p]
+        if(class(xs) %in% c('numeric', 'integer')){
+            statistic.function(xs, na.rm=TRUE)
+        }
+        else {NA}
+    }
     df <- data.frame(
         list(
             variable = vars,
-            entropy = sapply(vars, function(p) {
-                                 tab <- as.numeric(table(data[,p]),
-                                                   useNA = useNA)
-                                 p <- tab/sum(tab)
-                                 - sum(p * log2(p))
-                             }),
-            min = sapply(vars, function(p) min(data[, p], na.rm=TRUE)),
-            median = sapply(vars, function(p) median(data[,p], na.rm=TRUE)),
-            max = sapply(vars, function(p) max(data[,p], na.rm=TRUE)),
-
-            min.nonec = sapply(vars, function(p) min(vals.nonec(p))),
-            median.nonec = sapply(vars, function(p) median(vals.nonec(p))),
-            max.nonec = sapply(vars, function(p) max(vals.nonec(p))),
+            entropy = sapply(vars, function(p) entropy(data[,p])),
+            median = sapply(vars, function(p) compute.statistic(p, median)),
+            max = sapply(vars, function(p) compute.statistic(p, max)),
+            min = sapply(vars, function(p) compute.statistic(p, min)),
 
             distinct_vals = sapply(vars, function(p) {
                                        length(unique(data[,p], na.rm=TRUE))
-
                                    }),
             nacount = sapply(vars, function(p) {
                                  sum(is.na(data[,p]))
@@ -99,7 +108,24 @@ predictor.entropies <- function(vars, data=train, ovl=ovl_10_00001, useNA='no') 
             ),
         stringsAsFactors=FALSE
         )
+    if(with.ec) {
+        df.ec <- data.frame(
+            list(
+                entropy.nonec = sapply(vars,
+                    function(p) entropy(vals.nonec(p)),
 
+                median.noec = sapply(vars,
+                    function(p) compute.statistic(p, median, nonec=TRUE)),
+                max.noec = sapply(vars,
+                    function(p) compute.statistic(p, max, nonec=TRUE)),
+                min.noec = sapply(vars,
+                    function(p) compute.statistic(p, min, nonec=TRUE))
+                ),
+            stringsAsFactors = FALSE
+                )
+            )
+        df <- cbind(df, df.ec)
+    }
     df$num_eff_vals <- 2**(df$entropy)
     df <- df[order(df$num_eff_vals),]
     df

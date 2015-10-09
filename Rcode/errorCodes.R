@@ -41,15 +41,15 @@ predictor.entropies <- function(vars, data=train, useNA='no') {
                                  p <- tab/sum(tab)
                                  - sum(p * log2(p))
                              }),
-            median = sapply(vars, function(p) {
-                                median(data[,p], na.rm=TRUE)
-                            }),
-            max = sapply(vars, function(p) {
-                             max(data[,p], na.rm=TRUE)
-                         }),
-            min = sapply(vars, function(p) {
-                             min(data[, p], na.rm=TRUE)
-                         }),
+            median = if(class(data[, p]) %in% c('numeric', 'integer')) {
+                sapply(vars, function(p) median(data[,p], na.rm=TRUE))
+            } else NA
+            max = if(class(data[, p]) %in% c('numeric', 'integer')) {
+                sapply(vars, function(p) max(data[,p], na.rm=TRUE))
+            } else NA
+            min = if(class(data[, p]) %in% c('numeric', 'integer')) {
+                sapply(vars, function(p) min(data[,p], na.rm=TRUE))
+            } else NA
             distinct_vals = sapply(vars, function(p) {
                                        length(unique(data[,p], na.rm=TRUE))
                                    }),

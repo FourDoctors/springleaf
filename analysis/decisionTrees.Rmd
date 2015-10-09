@@ -218,23 +218,141 @@ fit.rpart.non.nz.ec <- rpart(target ~ .,
 
 ```
 
+We will use the variables' entropies and number NA to filter. Lets
+save these in a dataframe
+
+```{r varents}
+
+var.entropies.X1 <- predictor.entropies(names(train.model.num.X1.ls),
+                                        train.model.num.X1.ls, useNA=FALSE)
+save(var.entropies.X1, file="../data/varEntropiesX1ls.Rdata")
+
+var.entropies.X2 <- predictor.entropies(names(train.model.num.X2.ls),
+                                        train.model.num.X2.ls, useNA=FALSE)
+save(var.entropies.X2, file="../data/varEntropiesX2ls.Rdata")
+
+var.entropies.X3.hc <- predictor.entropies(names(train.model.num.X3.cats.hc),
+                                           train.model.num.X3.cats.hc, useNA=FALSE)
+save(var.entropies.X3.hc, file="../data/varEntropiesX3hc.Rdata")
+
+var.entropies.num.nz <- predictor.entropies(names(train.model.num.nz),
+                                            train.model.num.nz, useNA=FALSE)
+save(var.entropies.num.nz, file="../data/varEntropiesNumNZ.Rdata")
+
+var.entropies.num.ec <- predictor.entropies(names(train.model.num.ec),
+                                            train.model.num.ec, useNA=FALSE)
+save(var.entropies.num.nz, file="../data/varEntropiesNumEC.Rdata")
 
 
+
+var.entropies.non_num <- predictor.entropies(names(train.model.non_num.treated),
+                                             train.model.non_num.treated, useNA=FALSE)
+save(var.entropies.non_num, file="../data/varEntropiesNonNum.Rdata")
+
+```
+
+We will make models for NZ and EC data, and pick the predictors by
+their importance for a full model,
+
+```{r impvarsfunc}
+
+importantVariables <- function(Xdata, Y,
+                               control=rpart.control(depth=min(ncol(data), 100),
+                                   minsplit=10,
+                                   cp=0.001)
+                               ) {
+    fit <- rpart(target ~ .,
+                 data=cbind(Xdata, data.frame(target=Y)),
+                 control=control
+                 )
+    print(paste("fitted a model with auc",
+                roc.auc(predict(fit), Y))
+          )
+    varimp <- varImp(fit)
+    varimp$variable <- rownames(varimp)
+    with(varimp, variable[Overall > 0])
+}
+
+```
+
+```{r filterImpVars}
+
+N <- nrow(train)
+preds.fit.non_num <- importantVariables(
+    train.model.non_num.treated[, with(var.entropies.non_num,
+                                       variable[entropy > 0.5])],
+    train$target
+    )
+
+preds.fit.num.X1 <- importantVariables(
+    train.model.num.X1.ls[, with(var.entropies.X1,
+                                 variable[entropy > 0.5 &
+                                              nacount < N * 0.5]
+                                 )
+                         ],
+    train$target
+    )
+
+preds.fit.num.X2 <- importantVariables(
+    train.model.num.X2.ls[, with(var.entropies.X2,
+                                 variable[entropy > 0.5 &
+                                              nacount < N * 0.5]
+                                 )
+                          ],
+    train$target
+    )
+
+preds.fit.num.X3.hc <- importantVariables(
+    train.model.num.X3.cats.hc[, with(var.entropies.X3.hc,
+                                 variable[entropy > 0.5 &
+                                              nacount < N * 0.5]
+                                 )
+                          ],
+    train$target
+    )
+
+preds.fit.num.ec <- importantVariables(
+    train.model.num.ec[, with(var.entropies.num.ec,
+                                 variable[entropy > 0.5 &
+                                              nacount < N * 0.5]
+                                 )
+                          ],
+    train$target
+    )
+
+preds.fit.num.nz <- importantVariables(
+    train.model.num.nz[, with(var.entropies.num.nz,
+                                 variable[entropy > 0.5 &
+                                              nacount < N * 0.5]
+                                 )
+                          ],
+    train$target
+    )
+
+```
+
+
+
+
+```
 
 Lets try a full model
 
 ```{r fullmodel}
 
-
-preds.num.flt <- filteredVariables(train.model.num.treated,
-                                   min.entropy=0.5,
-                                   max.na.fraction=0.1)
-
-train.model.non.num.comb.flt <- cbind(train.model.num.treated[, preds.num.flt],
-                                      train.model.non_num.treated)
+preds.fit <- c(preds.fit.num.ec,
+               preds.fit.num.nz,
+               preds.fit.num.X1,
+               preds.fit.num.X2,
+               preds.fit.num.X3.hc,
+               preds.fit.non_num
+               )
+train.fit <- cbind(train.model.non_num.treated,
+                   train.model.num.treated)
+train.fit <- train.fit[, preds.fit]
 
 fit.rpart.all <- rpart(target ~ .,
-                       data=cbind(train.model.non.num.comb.flt,
+                       data=cbind(train.fit,
                            data.frame(target=train$target)
                                   ),
                        control=control
