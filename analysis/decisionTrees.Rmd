@@ -1,0 +1,246 @@
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(cache=FALSE)
+knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(include=TRUE)
+knitr::opts_chunk$set(results="asis")
+knitr::opts_chunk$set(fig.width=12)
+knitr::opts_chunk$set(fig.height=14)
+prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
+datapath <- paste(prjpath, "data/", sep="")
+analpath <- paste(prjpath, "analysis/", sep="")
+rcodepath <- paste(analpath, "Rcode/", sep="")
+setwd(analpath)
+
+```
+
+```{r loadLibsAndSource, include=FALSE}
+
+reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
+              "plyr",  "lubridate", "Hmisc", "corrplot",
+              "rpart", "rpart.plot", "rattle", "RWeka",
+              "caret", "gbm", "randomForest")
+lapply(reqdpkgs, library, character.only=TRUE)
+
+```
+
+# Decision Trees to characterize the variables
+
+We will use decision trees to characterize the predictor sets. For now
+we assume that the datasets have been loaded in the environment, and
+will fill in the details when we have time.
+
+## Discrete encoded nunmeric variables
+
+We can encode the discrete numeric variables (cluster X3 with entropy
+smaller than 4 bits) with various levels of entropy-loss to reduce the
+number of their distinct values. Which one is the best? We can answer
+this question by running a decision tree to see if there is an effect
+on the auc.
+
+```{r encodedNums}
+
+elosses <- c(1/8, 1/4, 1/2, 3/4)
+fits.rpart.eloss.hc.num.X3 <- lapply(elosses,
+                              function(max.loss) {
+                                  data <- data.frame(
+                                      lapply(train.model[, preds.num.X3.cats],
+                                             function(xs) {
+                                                 hxs <- huffman.encoded(xs,
+                                                                        max.loss=max.loss)
+                                                 print(paste("encoding for max-loss",
+                                                             max.loss,
+                                                             "entropy",
+                                                             entropy(xs), "-->", entropy(hxs)
+                                                             )
+                                                       )
+                                                 print(paste("encoding ",
+                                                             "distinct",
+                                                             length(unique(xs)), "-->",
+                                                             length(unique(hxs))
+                                                             )
+                                                       )
+                                                 print("----------------------------------")
+
+                                                 hxs
+                                             })
+                                      )
+                                  save(data, file=paste(
+                                                 paste("../data/trainModelNumX3catsEloss",
+                                                 max.loss, sep="-"), "Rdata", sep=".")
+                                       )
+                                  fit <- rpart(target ~ .,
+                                               data = cbind(data,
+                                                   data.frame(target=train$target)),
+                                               control=rpart.control(cp=0.001,
+                                                   depth=100, minsplit=10)
+                                               )
+                                  save(data, file=paste( paste("../data/fitNumX3catsEloss",
+                                                 max.loss, sep="-"), "Rdata", sep=".")
+                                       )
+                                  fit
+                              })
+
+auc.elosses <- sapply(fits.rpart.eloss.hc.num.X3,
+                      function(fit) roc.auc(predict(fit), train$target)
+                      )
+
+
+print("effect of lossy encoding of discrete numerical variables")
+print(data.frame(
+    entropy.loss = elosses,
+    auc.rpart = auc.elosses
+    ))
+
+```
+
+We see that going from a loss of 0.125 bits to 0.750 reduced the auc
+from by 0.04. The first thing to notice is that the auc itself is as
+good as model.num.nz (that uses only the non-zero numerical variables
+(preds.num.nz). This is probably because preds.num.X3.hc contain most
+of the relevant information of preds.num.nz. We can see this by
+looking at the decision trees for the fits.
+
+```{r hcmodeltrees}
+
+pdf(file="figures/treeEloss-0.125.pdf")
+print(fancyRpartPlot(fits.rpart.eloss.hc.num.X3[[1]]))
+dev.off()
+
+pdf(file="figures/treeEloss-0.250.pdf")
+print(fancyRpartPlot(fits.rpart.eloss.hc.num.X3[[2]]))
+dev.off()
+
+pdf(file="figures/treeEloss-0.500.pdf")
+print(fancyRpartPlot(fits.rpart.eloss.hc.num.X3[[3]]))
+dev.off()
+
+pdf(file="figures/treeEloss-0.750.pdf")
+print(fancyRpartPlot(fits.rpart.eloss.hc.num.X3[[4]]))
+dev.off()
+
+
+
+prp(fits.rpart.eloss.hc.num.X3[[1]], varlen=0)
+
+```
+
+```{r fitrpartnumnz}
+
+fit.rpart.num.nz <- rpart(target ~ .,
+                          data = cbind(train.model.num.nz,
+                              data.frame(target=train$target)),
+                          control=rpart.control(cp=0.001, depth=100, minsplit=10)
+                          )
+print(roc.auc(predict(fit.rpart.num.nz), train$target))
+
+
+
+```
+
+## Catgegorical variables
+
+```{r fitcat}
+
+fit.rpart.non_num <- rpart(target ~ .,
+                           data=cbind(train.model.non_num.treated,
+                               data.frame(target=train$target)),
+                           control=rpart.control(cp=0.001, depth=100, minsplit=10)
+                           )
+print(roc.auc(predict(fit.rpart.non_num), train$target))
+
+```
+
+
+
+Combine the categorical variables with the nz vars
+
+```{r fitcatnz}
+
+fit.rpart.non_num.nz <- rpart(target ~ .,
+                              data=cbind(train.model.non_num.treated,
+                                  train.model.num.nz,
+                                  data.frame(target=train$target)
+                                  ),
+                              control=rpart.control(cp=0.001, depth=100, minsplit=10)
+                              )
+print(roc.auc(predict(fit.rpart.non_num.nz), train$target))
+
+```
+
+We can extract the important variables from our fit, and just use
+those to see how well they predict
+
+```{r fitimpvars}
+
+vimp <- varImp(fit.rpart.non_num.nz)
+vimp$variable <- row.names(vimp)
+vimp <- vimp[order(vimp$Overall, decreasing=TRUE), ]
+preds.non_num.nz.imp <- with(vimp, variable[Overall > 0])
+print(paste("number of variables with position importance",
+            length(preds.non_num.nz.imp))
+      )
+
+train.model.non_num.nz <- cbind(train.model.non_num.treated,
+                                train.model.num.nz,)
+control=rpart.control(cp=0.001, depth=100, minsplit=10)
+fit.rpart.non_num.nz.imp <- rpart(target ~ .,
+                                  data=cbind(
+                                      train.model.non_num.nz[, preds.non_num.nz.imp],
+                                      data.frame(target=train$target)
+                                      ),
+                                  control=control
+                                  )
+
+print(paste("when we use only the important variables we find an auc",
+            roc.auc(predict(fit.rpart.non_num.nz.imp), train$target))
+      )
+
+```
+
+Using only the important variables seems enough. We can use these and
+add the ec variables.
+
+```{r fitnonnumnzec}
+
+primp.nz <- preds.non_num.nz.imp[grepl(pattern='numeric',
+                                        x = preds.non_num.nz.imp)
+                                  ]
+primp.non <- preds.non_num.nz.imp[!grepl(pattern='numeric',
+                                        x = preds.non_num.nz.imp)
+                                  ]
+fit.rpart.non.nz.ec <- rpart(target ~ .,
+                             data=cbind(train.model.num.nz[, primp.nz],
+                                 train.model.non_num.treated[, primp.non],
+                                 train.model.num.ec),
+                             control=control
+                             )
+
+```
+
+
+
+
+Lets try a full model
+
+```{r fullmodel}
+
+
+preds.num.flt <- filteredVariables(train.model.num.treated,
+                                   min.entropy=0.5,
+                                   max.na.fraction=0.1)
+
+train.model.non.num.comb.flt <- cbind(train.model.num.treated[, preds.num.flt],
+                                      train.model.non_num.treated)
+
+fit.rpart.all <- rpart(target ~ .,
+                       data=cbind(train.model.non.num.comb.flt,
+                           data.frame(target=train$target)
+                                  ),
+                       control=control
+                       )
+save(fit.rpart.all, file="../data/fitRpartAll")
+
+```
+
+

@@ -33,3 +33,35 @@ huffman.encoded <- function(xs, max.loss=1) {
     sxs[is.na(sxs)] <- "NA"
     hxs.c[sxs, 'code']
 }
+
+
+## discrete code respecting the numerical order
+
+quantile.encoded <- function(xs, qmax=4) {
+    txs <- as.data.frame(table(xs, exclude = NULL))
+    txs$xs <- as.numeric(as.character(txs$xs))
+    txs <- txs[order(txs$xs, na.last=TRUE),]
+    txs$p <- txs$Freq/sum(txs$Freq)
+    txs$c <- cumsum(txs$p)
+    bisect.prob <- function(txs,  n) {
+        qs <- seq(0, 1, length=2**n + 1)
+        qi <- sapply(txs$c, function(p) which(qs >= p)[1])
+        txs$code <- qi - 2
+        txs$q <- qs[qi-1]
+        if(length(unique(txs$code)) == 0 | n < qmax) {
+            bisect.prob(txs, n+1)
+        } else {
+            txs
+        }
+    }
+    txs <- bisect.prob(txs, 0)
+    txs[as.character(xs), 'code']
+}
+
+
+
+
+
+
+
+

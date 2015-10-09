@@ -16,7 +16,7 @@ hcols <- c("isym", "msym",
 
 
 hc <- huffman.code(xs)
-chc <- cuthoff(hc, max.loss=0.1)
+chc <- cuthoff(hc, max.loss=1)
 subset(chc,
        node.type=="Leaf"
        )[, c('isym', 'p', 'code')]

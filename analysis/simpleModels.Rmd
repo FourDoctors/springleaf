@@ -375,7 +375,7 @@ train.model.num.X3.cons.ls <- data.frame(
     )
 names(train.model.num.X3.cons.ls) <- paste(preds.num.X3.cons, 'ls', sep='.')
 
-max.loss <- 0.1
+max.loss <- 0.2
 train.model.num.X3.cats.hc <- data.frame(
     lapply(train.model[, preds.num.X3.cats],
            function(xs) {
@@ -385,6 +385,13 @@ train.model.num.X3.cats.hc <- data.frame(
                            entropy(xs), "-->", entropy(hxs)
                            )
                      )
+               print(paste("encoding ",
+                           "distinct",
+                           length(unique(xs)), "-->", length(unique(hxs))
+                           )
+                     )
+               print("----------------------------------")
+
                hxs
            })
     )
@@ -439,6 +446,62 @@ train.model.date.year <- data.frame(
 names(train.model.date.year) <- paste(preds.model.dates,
                                       'year', sep='.')
 
+train.model.date.month <- data.frame(
+    lapply(train.model.date,
+           function(xs) {
+               ys <- as.character(month(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+           })
+    )
+names(train.model.date.month) <- paste(preds.model.dates,
+                                      'month', sep='.')
+
+train.model.date.week <- data.frame(
+    lapply(train.model.date,
+           function(xs) {
+               ys <- as.character(week(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+               #week(xs)
+           })
+    )
+names(train.model.date.week) <- paste(preds.model.dates,
+                                      'week', sep='.')
+train.model.date.mday <- data.frame(
+    lapply(train.model.date,
+           function(xs) {
+               ys <- as.character(mday(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+               #mday(xs)
+           })
+    )
+names(train.model.date.mday) <- paste(preds.model.dates,
+                                     'mday', sep='.')
+
+train.model.date.yday <- data.frame(
+    lapply(train.model.date,
+           function(xs) {
+               ys <- as.character(yday(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+               #yday(xs)
+           })
+    )
+names(train.model.date.yday) <- paste(preds.model.dates,
+                                     'yday', sep='.')
+train.model.date.wday <- data.frame(
+    lapply(train.model.date,
+           function(xs) {
+               ys <- as.character(wday(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+           })
+    )
+names(train.model.date.wday) <- paste(preds.model.dates,
+                                     'wday', sep='.')
+
 train.model.cat <- data.frame(
     lapply(train[, preds.model.cats],
            function(xs) {
@@ -464,6 +527,11 @@ train.model.hasjob <- data.frame(
 
 train.model.non_num.treated <- cbind(
     train.model.date.year,
+    train.model.date.month,
+    train.model.date.week,
+    train.model.date.mday,
+    train.model.date.yday,
+    train.model.date.wday,
     train.model.cat,
     train.model.log,
     train.model.state,
