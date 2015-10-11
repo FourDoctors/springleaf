@@ -75,7 +75,7 @@ fits.rpart.eloss.hc.num.X3 <- lapply(elosses,
                                                control=rpart.control(cp=0.001,
                                                    depth=100, minsplit=10)
                                                )
-                                  save(data, file=paste( paste("../data/fitNumX3catsEloss",
+                                  save(fit, file=paste( paste("../data/fitNumX3catsEloss",
                                                  max.loss, sep="-"), "Rdata", sep=".")
                                        )
                                   fit
@@ -140,14 +140,19 @@ print(roc.auc(predict(fit.rpart.num.nz), train$target))
 
 ## Catgegorical variables
 
+There are not many categorical variables, so we can try a model with
+all of them.
+
 ```{r fitcat}
 
-fit.rpart.non_num <- rpart(target ~ .,
+fit.rpart.non_num.treated <- rpart(target ~ .,
                            data=cbind(train.model.non_num.treated,
                                data.frame(target=train$target)),
                            control=rpart.control(cp=0.001, depth=100, minsplit=10)
-                           )
-print(roc.auc(predict(fit.rpart.non_num), train$target))
+                                   )
+
+print(roc.auc(predict(fit.rpart.non_num.treated), train$target))
+save(fit.rpart.non_num.treated, file="../data/fits/rpart.non_num.treated")
 
 ```
 
@@ -347,10 +352,10 @@ preds.fit <- c(preds.fit.num.ec,
                preds.fit.num.X3.hc,
                preds.fit.non_num
                )
-train.fit <- cbind(train.model.non_num.treated,
+train.fit <- cbind(train.model.non_num.treate,
                    train.model.num.treated)
 train.fit <- train.fit[, preds.fit]
-
+control <- rpart.control(depth=100, minsplit=10, cp=0.001)
 fit.rpart.all <- rpart(target ~ .,
                        data=cbind(train.fit,
                            data.frame(target=train$target)
@@ -362,3 +367,57 @@ save(fit.rpart.all, file="../data/fitRpartAll")
 ```
 
 
+
+
+```{r scratch}
+
+data.test$date_7.year <- as.character(data.test$date_7.year)
+data.test[data.test$date_7.year =="2007", 'date_7.year'] <- "2008"
+data.test$date_7.year <- as.factor(data.test$date_7.year)
+levels(data.test$date_7.year)
+
+
+naed.unknownLevels <- function(data, p, unknown) {
+    xs <- as.character(data[, p])
+    xs[xs %in% unknown] <- NA
+    as.factor(xs)
+}
+
+```
+##Combine levels
+
+We need to combine levels, train data does not have all the values that
+the column might assume in test
+
+```{r combinelevels}
+
+combined.levels <- function(xs, ys) {
+    cxs <- as.character(xs)
+    cys <- as.character(ys)
+    lxys <- levels(as.factor(c(cxs, cys)))
+    list(factor(cxs, levels=lxys), factor(cys, levels=lxys))
+}
+
+```
+
+## Submissions
+
+### First mission
+
+We will prepare data for our first submission,
+
+```{r firstsubmission}
+
+data.train <- cbind(train.model.num.X3.cats.hc[, preds.X3hc], train.model.non_num.treated)
+data.test <- cbind(test.model.num.X3.cats.hc[, preds.X3hc], test.model.non_num.treated)
+
+data.train$target <- train$target
+fit1 <- rpart(target ~ ., data=data.train, control=control)
+
+roc.auc(predict(fit1), train$target)
+
+test.prediction <- data.frame(ID=test$ID, target=predict(fit1, newdata=data.test)
+
+
+
+```

@@ -14,6 +14,7 @@ analpath <- paste(prjpath, "analysis/", sep="")
 rcodepath <- paste(analpath, "Rcode/", sep="")
 setwd(analpath)
 
+
 ```
 
 
@@ -21,7 +22,7 @@ setwd(analpath)
 
 reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
               "plyr",  "lubridate", "Hmisc", "corrplot",
-              "rpart", "rpart.plot", "rattle", "RWeka",
+              "rpart", "rpart.plot", "rattle", "RWeka", "rattle",
               "caret", "gbm", "randomForest")
 lapply(reqdpkgs, library, character.only=TRUE)
 
@@ -131,30 +132,9 @@ ovl_10_00001<- lapply(predictors,
                      ol <- dpoutlyers(train[, var], offset=10, rarity=1e-5)
                      print(var)
                      print(ol)
-                 }
-                 )
+                 })
 
 names(ovl_10_00001) <- predictors
-
-```
-
-We will create datasets without the error-codes, which can be used for
-a cleaner comparison of variables, and also for modeling. Once we have
-better grasp on models that work, we will decide what to do with the
-information in the error-codes.
-
-```{r removeec}
-
-train.noec <- train
-test.noec <- test
-for (p in names(ovl_10_00001)) {
-         x <- train[,p]
-         x[ !(x %in% ovl_10_00001[[p]]) ] <- NA
-         train.noec[,p] <- x
-         y <- test[,p]
-         y[ !(y %in% ovl_10_00001[[p]]) ] <- NA
-         test.noec[,p] <- y
-     }
 
 ```
 
@@ -314,7 +294,6 @@ preds.num.X3.cons <- with(cluents,
                                         entropy.noz > elarge]
                           )
 
-preds.num.nz <- paste(preds.num, 'nz', sep='.')
 train.model.num.nz <- data.frame(lapply(train[, preds.num],
                                           function(xs) not.zero(xs)
                                           ),

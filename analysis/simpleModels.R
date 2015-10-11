@@ -1,4 +1,4 @@
-
+]
 ## ----setup, include=FALSE------------------------------------------------
 
 knitr::opts_chunk$set(cache=FALSE)
@@ -327,6 +327,7 @@ train.model.date.year <- data.frame(
                ys <- as.character(year(xs))
                ys[is.na(ys)] <- "unknown"
                as.factor(ys)
+               year(xs)
            })
     )
 names(train.model.date.year) <- paste(preds.model.dates,
@@ -338,6 +339,7 @@ train.model.date.month <- data.frame(
                ys <- as.character(month(xs))
                ys[is.na(ys)] <- "unknown"
                as.factor(ys)
+               month(xs)
            })
     )
 names(train.model.date.month) <- paste(preds.model.dates,
@@ -349,7 +351,7 @@ train.model.date.week <- data.frame(
                ys <- as.character(week(xs))
                ys[is.na(ys)] <- "unknown"
                as.factor(ys)
-               #week(xs)
+               week(xs)
            })
     )
 names(train.model.date.week) <- paste(preds.model.dates,
@@ -372,7 +374,7 @@ train.model.date.yday <- data.frame(
                ys <- as.character(yday(xs))
                ys[is.na(ys)] <- "unknown"
                as.factor(ys)
-               #yday(xs)
+               yday(xs)
            })
     )
 names(train.model.date.yday) <- paste(preds.model.dates,
@@ -743,5 +745,4 @@ for(n in 2:max(var.entropies$distinct_vals)) {
 ## ----cors1---------------------------------------------------------------
 
 cors1 <- cor(train[, num_vals_num_vars$label[127:136]], use="pairwise.complete.obs")
-
 

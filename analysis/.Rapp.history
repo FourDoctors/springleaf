@@ -1,0 +1,4 @@
+load("/Users/vishalsoodmuchu/work/learn/competitions/kaggle/springleaf/data/test/testModelNonNumTreated.Rdata")
+getwd()
+setwd("../../analysis/")
+list.files()
