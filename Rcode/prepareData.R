@@ -6,290 +6,298 @@
 
 print("combined train and test, issue function now")
 ## ----setnumdatatypes-----------------------------------------------------
-## function so that we can run the two preparations, numerical and categorical whereever we want.
 
-prepareNumerical <- function() {
-    elarge <- 4
-    max.loss <- 1
-    d <- dist(scale(var.fpnz), method='euclidean')
-    clu <- hclust(d, method="ward")
-    clucut <- cutree(clu, k=3)
-    preds.num <- setdiff(cluents$predictor, c("X", "ID"))
-    preds.num.X1 <- with(cluents, predictor[clufp == 1])
-    preds.num.X2 <- with(cluents, predictor[clufp == 2])
-    preds.num.X3 <- with(cluents, predictor[clufp == 3])
+N.train <- nrow(train)
+N.test <- nrow(test)
+elarge <- 4
+max.loss <- 1
+d <- dist(scale(var.fpnz), method='euclidean')
+clu <- hclust(d, method="ward")
+clucut <- cutree(clu, k=3)
+preds.num <- setdiff(cluents$predictor, c("X", "ID"))
+preds.num.X1 <- setdiff(with(cluents, predictor[clufp == 1]), c("X", "ID"))
+preds.num.X2 <- with(cluents, predictor[clufp == 2])
+preds.num.X3 <- with(cluents, predictor[clufp == 3])
 
-    preds.num.X3.cats <- with(cluents,
-                              predictor[clufp == 3 &
-                                            entropy.noz <= elarge]
-                              )
-    preds.num.X3.cons <- with(cluents,
-                              predictor[clufp == 3 &
-                                            entropy.noz > elarge]
-                              )
+preds.num.X3.cats <- with(cluents,
+                          predictor[clufp == 3 &
+                                        entropy.noz <= elarge]
+                          )
+preds.num.X3.cons <- with(cluents,
+                          predictor[clufp == 3 &
+                                        entropy.noz > elarge]
+                          )
 
-    preds.num.nz <- paste(preds.num, 'nz', sep='.')
-    print("nz")
-    train.and.test.num.nz <- data.frame(lapply(train.and.test[, preds.num],
-                                               function(xs) not.zero(xs)
-                                               ),
-                                        stringsAsFactors=FALSE
-                                        )
-    names(train.and.test.num.nz) <- paste(preds.num, 'nz', sep='.')
-    save(train.and.test.num.nz, file="../data/trainTestNumNZ.Rdata")
+preds.num.nz <- paste(preds.num, 'nz', sep='.')
+print("nz")
+train.and.test.num.nz <- data.frame(lapply(train.and.test[, preds.num],
+                                           function(xs) not.zero(xs)
+                                           ),
+                                    stringsAsFactors=FALSE
+                                    )
+names(train.and.test.num.nz) <- paste(preds.num, 'nz', sep='.')
+save(train.and.test.num.nz, file="../data/trainTest/trainTestNumNZ.Rdata")
 
+print("ec")
+train.and.test.num.ec <- data.frame(lapply(preds.num,
+                                           function(p) {
+                                               xs <- train.and.test[, p]
+                                               ecs <- ovl_10_00001[[p]]
+                                               cxs <- as.character(xs)
+                                               cxs[ !(xs %in% ecs)] <- "nec"
+                                               print(paste("ec var", p,
+                                                           "number ecs",
+                                                           length(ecs))
+                                                     )
+                                               as.factor(cxs)
+                                           }
+                                           )
+                                    )
+names(train.and.test.num.ec) <- paste(preds.num, "ec", sep=".")
+save(train.and.test.num.ec, file="../data/trainTest/trainTestNumEC.Rdata")
 
-    print("ec")
-    train.and.test.num.ec <- data.frame(lapply(preds.num,
-                                               function(p) {
-                                                   xs <- train.and.test[, p]
-                                                   ecs <- ovl_10_00001[[p]]
-                                                   cxs <- as.character(xs)
-                                                   cxs[ !(xs %in% ecs)] <- "nec"
-                                                   print(paste("ec var", p,
-                                                               "number ecs",
-                                                               length(ecs))
-                                                         )
-                                                   as.factor(cxs)
-                                               }
-                                               )
-                                        )
-    names(train.and.test.num.ec) <- paste(preds.num, "ec", sep=".")
-    save(test.model.num.ec, file="../data/testModelNumEC.Rdata")
+print("X1ls")
+train.and.test.num.X1.ls <- data.frame(
+    lapply(preds.num.X1,
+           function(p) {
+               xs <- train.and.test[, p]
+               xs[xs %in% ovl_10_00001[[p]]] <- NA
+               xs[ xs <= 0] <- NA
+               log10(1 + xs)
+           }),
+    stringsAsFactors = FALSE
+    )
+names(train.and.test.num.X1.ls) <- paste(preds.num.X1, 'ls', sep='.')
+save(train.and.test.num.X1.ls, file="../data/trainTest/trainTestNumX1ls.Rdata")
 
-    print("X1ls")
-    train.and.test.num.X1.ls <- data.frame(
-        lapply(preds.num.X1,
-               function(p) {
-                   xs <- train.and.test[, p]
-                   xs[xs %in% ovl_10_00001[[p]]] <- NA
-                   xs[ xs <= 0] <- NA
-                   log10(1 + xs)
-               }),
-        stringsAsFactors = FALSE
-        )
-    names(train.and.test.num.X1.ls) <- paste(preds.num.X1, 'ls', sep='.')
-    save(train.and.test.num.X1.ls, file="../data/trainTestNumX1ls.Rdata")
+print("X2ls")
+train.and.test.num.X2.ls <- data.frame(
+    lapply(preds.num.X2,
+           function(p) {
+               xs <- train.and.test[, p]
+               xs[xs %in% ovl_10_00001[[p]]] <- NA
+               xs[xs <= 0] <- NA
+               log10(1 + xs)
+           }),
+    stringsAsFactors = FALSE
+    )
+names(train.and.test.num.X2.ls) <- paste(preds.num.X2, 'ls', sep='.')
+save(train.and.test.num.X2.ls, file="../data/trainTest/trainTestNumX2ls.Rdata")
 
-    print("X2ls")
-    train.and.test.num.X2.ls <- data.frame(
-        lapply(preds.num.X2,
-               function(p) {
-                   xs <- train.and.test[, p]
-                   xs[xs %in% ovl_10_00001[[p]]] <- NA
-                   xs[xs <= 0] <- NA
-                   log10(1 + xs)
-               }),
-        stringsAsFactors = FALSE
-        )
-    names(train.and.test.num.X2.ls) <- paste(preds.num.X2, 'ls', sep='.')
-    save(train.and.test.num.X2.ls, file="../data/Rdata/trainTestNumX2ls.Rdata")
+train.and.test.num.X3.ls <- data.frame(
+    lapply(preds.num.X3,
+           function(p) {
+               xs <- train.and.test[, p]
+               xs[xs %in% ovl_10_00001[[p]]] <- NA
+               xs[xs <= 0] <- NA
+               log10(1 + xs)
+           }),
+    stringsAsFactors = FALSE
+    )
+names(train.and.test.num.X3.ls) <- paste(preds.num.X3, 'ls', sep='.')
+save(train.and.test.num.X3.ls, file="../data/trainTest/trainTestNumX3LS.Rdata")
 
-    train.and.test.num.X3.ls <- data.frame(
-        lapply(preds.num.X3,
-               function(p) {
-                   xs <- train.and.test[, p]
-                   xs[xs %in% ovl_10_00001[[p]]] <- NA
-                   xs[xs <= 0] <- NA
-                   log10(1 + xs)
-               }),
-        stringsAsFactors = FALSE
-        )
-    names(train.and.test.num.X3.ls) <- paste(preds.num.X3, 'ls', sep='.')
-    save(train.and.test.num.X3.ls, file="../data/trainTestNumX3LS.Rdata")
+print("X3ls")
+train.and.test.num.X3.cons.ls <- data.frame(
+    lapply(preds.num.X3.cons,
+           function(p) {
+               xs <- train.and.test[, p]
+               xs[xs %in% ovl_10_00001[[p]]] <- NA
+               xs[xs <= 0] <- NA
+               log10(1 + xs)
+           }),
+    stringsAsFactors = FALSE
+    )
+names(train.and.test.num.X3.cons.ls) <- paste(preds.num.X3.cons, 'ls', sep='.')
+save(train.and.test.num.X3.cons.ls, file="../data/trainTest/trainTestNumX3consLS.Rdata")
 
-    print("X3ls")
-    train.and.test.num.X3.cons.ls <- data.frame(
-        lapply(preds.num.X3.cons,
-               function(p) {
-                   xs <- train.and.test[, p]
-                   xs[xs %in% ovl_10_00001[[p]]] <- NA
-                   xs[xs <= 0] <- NA
-                   log10(1 + xs)
-               }),
-        stringsAsFactors = FALSE
-        )
-    names(train.and.test.num.X3.cons.ls) <- paste(preds.num.X3.cons, 'ls', sep='.')
-    save(train.and.test.num.X3.cons.ls, file="../data/trainTestNumX3consLS.Rdata")
+print("X3hc")
+max.loss <- 0.2
+train.and.test.num.X3.cats.hc <- data.frame(
+    lapply(train.and.test[, preds.num.X3.cats],
+           function(xs) {
+               hxs <- huffman.encoded(xs, max.loss=max.loss)
+               print(paste("encoding ",
+                           "entropy",
+                           entropy(xs), "-->", entropy(hxs)
+                           )
+                     )
+               print(paste("encoding ",
+                           "distinct",
+                           length(unique(xs)), "-->", length(unique(hxs))
+                           )
+                     )
+               print("----------------------------------")
 
-    print("X3hc")
-    max.loss <- 0.2
-    train.and.test.num.X3.cats.hc <- data.frame(
-        lapply(train.and.test[, preds.num.X3.cats],
-               function(xs) {
-                   hxs <- huffman.encoded(xs, max.loss=max.loss)
-                   print(paste("encoding ",
-                               "entropy",
-                               entropy(xs), "-->", entropy(hxs)
-                               )
-                         )
-                   print(paste("encoding ",
-                               "distinct",
-                               length(unique(xs)), "-->", length(unique(hxs))
-                               )
-                         )
-                   print("----------------------------------")
+               hxs
+           })
+    )
+names(train.and.test.num.X3.cats.hc) <- paste(preds.num.X3.cats,
+                                              'hc', sep=".")
+save(train.and.test.num.X3.cats.hc,
+     file="../data/trainTest/trainTestNumX3catsHC.Rdata")
 
-                   hxs
-               })
-        )
-    names(train.and.test.num.X3.cats.hc) <- paste(preds.num.X3.cats,
-                                                  'hc', sep=".")
+## ----savenumvardata------------------------------------------------------
+print("num combine")
+train.and.test.num.treated <- cbind(
+    train.and.test.num.X1.ls,
+    train.and.test.num.X2.ls,
+    train.and.test.num.X3.ls,
+    train.and.test.num.X3.cats.hc,
+    train.and.test.num.nz,
+    train.and.test.num.ec
+    )
 
+save(train.and.test.num.treated, file="../data/trainTestNumTreated.Rdata")
 
-    ## ----savenumvardata------------------------------------------------------
-    print("num combine")
-    train.and.test.num.treated <- cbind(
-        train.and.test.num.X1.ls,
-        train.and.test.num.X2.ls,
-        train.and.test.num.X3.ls,
-        train.and.test.num.X3.cats.hc,
-        train.and.test.num.nz,
-        train.and.test.num.ec
-        )
-
-    save(train.and.test.num.treated, file="../data/trainTestNumTreated.Rdata")
-}
 
 ## ----modeldataandpreds---------------------------------------------------
-prepareCategorical <- function() {
 
-    preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
-    preds.model.cats <- c('hrq', 'cbns', 'abcdefu',
-                          'shrug_first', 'shrug_second', 'shrug_third',
-                          'oru_first', 'oru_second', 'oru_third',
-                          'eye', 'status', 'medium', 'idused')
-    preds.model.jobs <- c('job_first', 'job_second')
-    preds.model.locs <- c('state_first', 'state_second', 'city')
-    preds.model.logs <- predictors_log
+preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
+preds.model.cats <- c('hrq', 'cbns', 'abcdefu',
+                      'shrug_first', 'shrug_second', 'shrug_third',
+                      'oru_first', 'oru_second', 'oru_third',
+                      'eye', 'status', 'medium', 'idused')
+preds.model.jobs <- c('job_first', 'job_second')
+preds.model.locs <- c('state_first', 'state_second', 'city')
+preds.model.logs <- predictors_log
 
-    ## set dates from strings
-    print("date")
-    train.and.test.date <- data.frame(
-        lapply(train.and.test[, preds.model.dates],
-               function(xs) ymd(xs))
-        )
+## set dates from strings
+print("date")
+train.and.test.date <- data.frame(
+    lapply(train.and.test[, preds.model.dates],
+           function(xs) ymd(xs))
+    )
 
-    print("year")
-    train.and.test.date.year <- data.frame(
-        lapply(train.and.test.date,
-               function(xs) {
-                   ys <- as.character(year(xs))
-                   ys[is.na(ys)] <- "unknown"
-                   as.factor(ys)
-               })
-        )
-    names(train.and.test.date.year) <- paste(preds.model.dates,
-                                             'year', sep='.')
-    save(train.and.test.date.year, file="../data/trainTestDateYear.Rdata")
+print("year")
+train.and.test.date.year <- data.frame(
+    lapply(train.and.test.date,
+           function(xs) {
+               ys <- as.character(year(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+           })
+    )
+names(train.and.test.date.year) <- paste(preds.model.dates,
+                                         'year', sep='.')
+save(train.and.test.date.year, file="../data/trainTest/trainTestDateYear.Rdata")
 
-    print("month")
-    train.and.test.date.month <- data.frame(
-        lapply(train.and.test.date,
-               function(xs) {
-                   ys <- as.character(month(xs))
-                   ys[is.na(ys)] <- "unknown"
-                   as.factor(ys)
-               })
-        )
-    names(train.and.test.date.month) <- paste(preds.model.dates,
-                                              'month', sep='.')
-    save(train.and.test..date.month, file="../data/trainTestDateMonth.Rdata")
+print("month")
+train.and.test.date.month <- data.frame(
+    lapply(train.and.test.date,
+           function(xs) {
+               ys <- as.character(month(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+           })
+    )
+names(train.and.test.date.month) <- paste(preds.model.dates,
+                                          'month', sep='.')
+save(train.and.test.date.month, file="../data/trainTest/trainTestDateMonth.Rdata")
 
-    print("week")
-    train.and.test.date.week <- data.frame(
-        lapply(train.and.test.date,
-               function(xs) {
-                   ys <- as.character(week(xs))
-                   ys[is.na(ys)] <- "unknown"
-                   as.factor(ys)
+print("week")
+train.and.test.date.week <- data.frame(
+    lapply(train.and.test.date,
+           function(xs) {
+               ys <- as.character(week(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
                                         #week(xs)
-               })
-        )
-    names(train.and.test.date.week) <- paste(preds.model.dates,
-                                             'week', sep='.')
-    save(train.and.test.date.week, file="../data/trainTestDateWeek.Rdata")
+           })
+    )
+names(train.and.test.date.week) <- paste(preds.model.dates,
+                                         'week', sep='.')
+save(train.and.test.date.week, file="../data/trainTest/trainTestDateWeek.Rdata")
 
-    print("mday")
-    train.and.test.date.mday <- data.frame(
-        lapply(train.and.test.date,
-               function(xs) {
-                   ys <- as.character(mday(xs))
-                   ys[is.na(ys)] <- "unknown"
-                   as.factor(ys)
+print("mday")
+train.and.test.date.mday <- data.frame(
+    lapply(train.and.test.date,
+           function(xs) {
+               ys <- as.character(mday(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
                                         #mday(xs)
-               })
-        )
-    names(train.and.test.date.mday) <- paste(preds.model.dates,
-                                             'mday', sep='.')
-    save(train.and.test.date.mday, file="../data/trainTestDateMday.Rdata")
+           })
+    )
+names(train.and.test.date.mday) <- paste(preds.model.dates,
+                                         'mday', sep='.')
+save(train.and.test.date.mday, file="../data/trainTest/trainTestDateMday.Rdata")
 
-    print("yday")
-    train.and.test.date.yday <- data.frame(
-        lapply(train.and.test.date,
-               function(xs) {
-                   ys <- as.character(yday(xs))
-                   ys[is.na(ys)] <- "unknown"
-                   as.factor(ys)
+print("yday")
+train.and.test.date.yday <- data.frame(
+    lapply(train.and.test.date,
+           function(xs) {
+               ys <- as.character(yday(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
                                         #yday(xs)
-               })
-        )
-    names(train.and.test.date.yday) <- paste(preds.model.dates,
-                                             'yday', sep='.')
-    save(train.and.date.yday, file="../data/trainTestDateYday.Rdata")
+           })
+    )
+names(train.and.test.date.yday) <- paste(preds.model.dates,
+                                         'yday', sep='.')
+save(train.and.test.date.yday, file="../data/trainTest/trainTestDateYday.Rdata")
 
-    print("wday")
-    train.and.test.date.wday <- data.frame(
-        lapply(train.and.test.date,
-               function(xs) {
-                   ys <- as.character(wday(xs))
-                   ys[is.na(ys)] <- "unknown"
-                   as.factor(ys)
-               })
-        )
-    names(train.and.test.date.wday) <- paste(preds.model.dates,
-                                             'wday', sep='.')
-    save(train.and.test.date.wday, file="../data/trainTestDateWday.Rdata")
+print("wday")
+train.and.test.date.wday <- data.frame(
+    lapply(train.and.test.date,
+           function(xs) {
+               ys <- as.character(wday(xs))
+               ys[is.na(ys)] <- "unknown"
+               as.factor(ys)
+           })
+    )
+names(train.and.test.date.wday) <- paste(preds.model.dates,
+                                         'wday', sep='.')
+save(train.and.test.date.wday, file="../data/trainTest/trainTestDateWday.Rdata")
 
-    print("cat")
-    train.and.test.cat <- data.frame(
-        lapply(train.and.test[, preds.model.cats],
-               function(xs) {
-                   xs[is.na(xs)] <- 'unknown'
-                   as.factor(xs)
-               })
-        )
+print("cat")
+train.and.test.cat <- data.frame(
+    lapply(train.and.test[, preds.model.cats],
+           function(xs) {
+               xs[is.na(xs)] <- 'unknown'
+               as.factor(xs)
+           })
+    )
 
-    train.and.test.log <- train.and.test[, preds.model.logs]
-    train.and.test.loc <- train.and.test[, preds.model.locs]
-    train.and.test.job <- train.and.test[, preds.model.jobs]
+train.and.test.log <- train.and.test[, preds.model.logs]
+save(train.and.test.log, file="../data/trainTest/trainTestLog.Rdata")
 
-    train.and.test.state <- data.frame(
-        lapply(train.and.test[, c('state_first', 'state_second')],
-               function(xs) as.factor(xs)
-               )
-        )
+train.and.test.loc <- train.and.test[, preds.model.locs]
+save(train.and.test.loc, file="../data/trainTest/trainTestLoc.Rdata")
 
-    train.and.test.hasjob <- data.frame(
-        hasjob = train.and.test$job_first != "-1" |
-            train.and.test$job_second != "-1"
-        )
+train.and.test.job <- train.and.test[, preds.model.jobs]
+save(train.and.test.job, file="../data/trainTest/trainTestJob.Rdata")
 
-    print("non num combine")
-    train.and.test..non_num.treated <- cbind(
-        train.and.test.date.year,
-        train.and.test.date.month,
-        train.and.test.date.week,
-        train.and.test.date.mday,
-        train.and.test.date.yday,
-        train.and.test.date.cat,
-        train.and.test.wday,
-        train.and.test.log,
-        train.and.test.state,
-        train.and.test.hasjob
-        )
+train.and.test.state <- data.frame(
+    lapply(train.and.test[, c('state_first', 'state_second')],
+           function(xs) as.factor(xs)
+           )
+    )
+save(train.and.test.state, file="../data/trainTest/trainTestState.Rdata")
 
-    save(train.and.test.non_num.treated, file="../data/trainTestNonNumTreated.Rdata")
-}
+train.and.test.hasjob <- data.frame(
+    hasjob = train.and.test$job_first != "-1" |
+        train.and.test$job_second != "-1"
+    )
+save(train.and.test.hasjob, file="../data/trainTest/trainTestHasJob.Rdata")
 
+print("non num combine")
+train.and.test.non_num.treated <- cbind(
+    train.and.test.date.year,
+    train.and.test.date.month,
+    train.and.test.date.week,
+    train.and.test.date.mday,
+    train.and.test.date.yday,
+    train.and.test.date.wday,
+    train.and.test.cat,
+    train.and.test.log,
+    train.and.test.state,
+    train.and.test.hasjob
+    )
+
+save(train.and.test.non_num.treated, file="../data/trainTestNonNumTreated.Rdata")
+
+
+
+## separate the combined train and test data into separate train and test dataframes
 

@@ -456,7 +456,7 @@ train.model.date.mday <- data.frame(
                #mday(xs)
            })
     )
-names(train.model.date.mday) <- paste(preds.model.dates,
+names(train.model.date.mday) <- pasnte(preds.model.dates,
                                      'mday', sep='.')
 
 train.model.date.yday <- data.frame(

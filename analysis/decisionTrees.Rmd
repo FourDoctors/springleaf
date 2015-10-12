@@ -24,6 +24,13 @@ lapply(reqdpkgs, library, character.only=TRUE)
 
 ```
 
+Add sources here.
+```{r sources}
+
+source("../roc.R")
+
+```
+
 # Decision Trees to characterize the variables
 
 We will use decision trees to characterize the predictor sets. For now
@@ -118,23 +125,41 @@ dev.off()
 pdf(file="figures/treeEloss-0.750.pdf")
 print(fancyRpartPlot(fits.rpart.eloss.hc.num.X3[[4]]))
 dev.off()
-
-
-
 prp(fits.rpart.eloss.hc.num.X3[[1]], varlen=0)
+
+```
+
+We will use the 0.25 entropy loss.
+
+## Data for models
+We have noted in the prepare data code (in *prepareData.Rmd* or
+*prepareData.R*) that the train and test data needs to be prepared
+together. We have saved the results in the data/trainTest folder. We
+will use this data for our models.
+
+```{r loadsomedata}
+
+load("../data/train_labeled.Rdata")
+load("../data/test_labeled.Rdata")
+N.train <- nrow(train)
+N.test <- nrow(test)
 
 ```
 
 ```{r fitrpartnumnz}
 
-fit.rpart.num.nz <- rpart(target ~ .,
-                          data = cbind(train.model.num.nz,
-                              data.frame(target=train$target)),
-                          control=rpart.control(cp=0.001, depth=100, minsplit=10)
-                          )
+if (!exists("train.and.test.num.nz")) {
+    load("../data/trainTest/trainTestNumNZ.Rdata")
+}
+
+train.num.nz <- train.and.test.num.nz[N.train,]
+fit.rpart.nz <- rpart(target ~ .,
+                      data = cbind(train.num.nz,
+                          data.frame(target=train$target)),
+                      control=rpart.control(cp=0.001,
+                          depth=100, minsplit=10)
+                      )
 print(roc.auc(predict(fit.rpart.num.nz), train$target))
-
-
 
 ```
 
