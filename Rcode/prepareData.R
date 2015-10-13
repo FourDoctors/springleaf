@@ -1,7 +1,7 @@
 ## ----combinetesttrain----------------------------------------------------
 
-#preds_all <- Filter(function(p) ! p %in% c('ID', 'X', 'target'), names(train))
-#train.and.test <- rbind(train[, preds_all], test[, preds_all])
+preds_all <- Filter(function(p) ! p %in% c('ID', 'X', 'target'), names(train))
+train.and.test <- rbind(train[, preds_all], test[, preds_all])
 #train.and.test$train.or.test <- c(rep("train", nrow(train)), rep("test", nrow(test)))
 
 print("combined train and test, issue function now")
@@ -153,14 +153,14 @@ save(train.and.test.num.treated, file="../data/trainTestNumTreated.Rdata")
 
 ## ----modeldataandpreds---------------------------------------------------
 
-preds.model.dates <- predictors_chr[ grepl(x=predictors_chr, pattern='date')]
+preds.model.dates <- preds_all[ grepl(x=preds_all, pattern='date')]
 preds.model.cats <- c('hrq', 'cbns', 'abcdefu',
                       'shrug_first', 'shrug_second', 'shrug_third',
                       'oru_first', 'oru_second', 'oru_third',
                       'eye', 'status', 'medium', 'idused')
 preds.model.jobs <- c('job_first', 'job_second')
 preds.model.locs <- c('state_first', 'state_second', 'city')
-preds.model.logs <- predictors_log
+preds.model.logs <- preds_all[grepl(pattern='logical', x=preds_all)]
 
 ## set dates from strings
 print("date")
@@ -171,16 +171,12 @@ train.and.test.date <- data.frame(
 
 print("year")
 train.and.test.date.year <- data.frame(
-    lapply(train.and.test.date,
-           function(xs) {
-               ys <- as.character(year(xs))
-               ys[is.na(ys)] <- "unknown"
-               as.factor(ys)
-           })
+    lapply(train.and.test.date, year)
     )
 names(train.and.test.date.year) <- paste(preds.model.dates,
                                          'year', sep='.')
-save(train.and.test.date.year, file="../data/trainTest/trainTestDateYear.Rdata")
+save(train.and.test.date.year,
+     file="../data/trainTest/trainTestDateYear.Rdata")
 
 print("month")
 train.and.test.date.month <- data.frame(
@@ -193,45 +189,39 @@ train.and.test.date.month <- data.frame(
     )
 names(train.and.test.date.month) <- paste(preds.model.dates,
                                           'month', sep='.')
-save(train.and.test.date.month, file="../data/trainTest/trainTestDateMonth.Rdata")
+save(train.and.test.date.month,
+     file="../data/trainTest/trainTestDateMonth.Rdata")
 
 print("week")
 train.and.test.date.week <- data.frame(
     lapply(train.and.test.date,
            function(xs) {
-               ys <- as.character(week(xs))
-               ys[is.na(ys)] <- "unknown"
-               as.factor(ys)
-                                        #week(xs)
+               ##ys <- as.character(week(xs))
+               ##ys[is.na(ys)] <- "unknown"
+               ##as.factor(ys)
+               week(xs)
            })
     )
 names(train.and.test.date.week) <- paste(preds.model.dates,
                                          'week', sep='.')
-save(train.and.test.date.week, file="../data/trainTest/trainTestDateWeek.Rdata")
+save(train.and.test.date.week,
+     file="../data/trainTest/trainTestDateWeek.Rdata")
 
 print("mday")
 train.and.test.date.mday <- data.frame(
     lapply(train.and.test.date,
            function(xs) {
-               ys <- as.character(mday(xs))
-               ys[is.na(ys)] <- "unknown"
-               as.factor(ys)
-                                        #mday(xs)
+               mday(xs)
            })
     )
 names(train.and.test.date.mday) <- paste(preds.model.dates,
                                          'mday', sep='.')
-save(train.and.test.date.mday, file="../data/trainTest/trainTestDateMday.Rdata")
+save(train.and.test.date.mday,
+     file="../data/trainTest/trainTestDateMday.Rdata")
 
 print("yday")
 train.and.test.date.yday <- data.frame(
-    lapply(train.and.test.date,
-           function(xs) {
-               ys <- as.character(yday(xs))
-               ys[is.na(ys)] <- "unknown"
-               as.factor(ys)
-                                        #yday(xs)
-           })
+    lapply(train.and.test.date, yday)
     )
 names(train.and.test.date.yday) <- paste(preds.model.dates,
                                          'yday', sep='.')
@@ -295,7 +285,7 @@ train.and.test.non_num.treated <- cbind(
     train.and.test.hasjob
     )
 
-save(train.and.test.non_num.treated, file="../data/trainTestNonNumTreated.Rdata")
+save(train.and.test.non_num.treated, file="../data/trainTest/trainTestNonNumTreated.Rdata")
 
 
 

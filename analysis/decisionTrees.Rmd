@@ -152,17 +152,75 @@ if (!exists("train.and.test.num.nz")) {
     load("../data/trainTest/trainTestNumNZ.Rdata")
 }
 
-train.num.nz <- train.and.test.num.nz[N.train,]
+Y <- rep("NO", length=N.train)
+Y[train$target == 1] <- "YES"
+Y <- as.factor(Y)
+train.num.nz <- train.and.test.num.nz[1:N.train,]
 fit.rpart.nz <- rpart(target ~ .,
                       data = cbind(train.num.nz,
-                          data.frame(target=train$target)),
+                          data.frame(target=Y)),
                       control=rpart.control(cp=0.001,
                           depth=100, minsplit=10)
                       )
 print(roc.auc(predict(fit.rpart.num.nz), train$target))
 
+
+
+```
+The function _twoClassSummary_ from _caret_ does not seem to work,
+returning NA for ROC. We will have to try our own,
+
+```{r twoClassSummary}
+
+ourTwoClassSummary <- function(data, lev=NULL, model=NULL) {
+    rocObject <- roc(response=data$obs, predictor=data[, lev[1]])
+    rocAUC <- rocObject$auc
+    out <- c(rocAUC, sensitivity(data[, "pred"], data[, "obs"], lev[1]),
+             specificity(data[, "pred"], data[, "obs"], lev[2]))
+    names(out) <- c("ROC", "Sens", "Spec")
+    out
+}
+
 ```
 
+Lets run a CV for rpart decision trees on non-num data,
+
+```{r categoricalRpartCV}
+
+if (!exists("train.and.test.non_num.treated")) {
+    load("../data/trainTest/trainTestNonNumTreated.Rdata")
+}
+train.non_num <- train.and.test.non_num.treated[1:N.train, ]
+test.non_num <- train.and.test.non_num.treated[(N.train + 1): (N.train + N.test),]
+
+Y <- rep("NO", length=N.train)
+Y[train$target == 1] <- "YES"
+Y <- as.factor(Y)
+
+fit.rpart.non_num <- rpart(target ~ .,
+                           data = cbind(train.non_num,
+                               data.frame(target=Y)),
+                           control=rpart.control(cp=0.0008,
+                               depth=100, minsplit=10)
+                           )
+
+print(roc.auc(predict(fit.rpart.num.nz), train$target))
+
+
+set.seed(100)
+fit.rpart.non_num.cvtune.cp <- train(x = train.non_num,
+                                     y = Y,
+                                     method="rpart",
+                                     tuneLength = 100,
+                                     metric = "ROC",
+                                     trControl = trainControl(
+                                         summaryFunction = twoClassSummary,
+                                         classProbs = TRUE,
+                                         method = 'repeatedcv',
+                                         repeats = 3)
+                                     )
+
+```
 ## Catgegorical variables
 
 There are not many categorical variables, so we can try a model with
