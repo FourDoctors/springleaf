@@ -204,7 +204,7 @@ fit.rpart.non_num <- rpart(target ~ .,
                                depth=100, minsplit=10)
                            )
 
-print(roc.auc(predict(fit.rpart.num.nz), train$target))
+print(roc.auc(predict(fit.rpart.non_num)[, 'YES'], train$target))
 
 
 set.seed(100)
@@ -221,6 +221,53 @@ fit.rpart.non_num.cvtune.cp <- train(x = train.non_num,
                                      )
 
 ```
+
+### A GBM model
+
+```{r gbmmodel1}
+
+set.seed(100)
+fitctrl <- trainControl(method="repeatedcv",
+                        number=10,
+                        repeats=2)
+gbmGrid.0 <- expand.grid(interaction.depth=c(5,7,9),
+                         n.trees=seq(400, 800, by=100),
+                         shrinkage=c(0.01, 0.05, 0.1),
+                         n.minobsinnode=10)
+gbmtune.non_num.nz.g0 <- train(x=cbind(train.num.nz,
+                                   train.non_num),
+                               y=Y,
+                               method='gbm',
+                               tuneGrid=gbmGrid.0,
+                               trControl=trainControl(
+                                   summaryFunction=twoClassSummary,
+                                   classProbs=TRUE,
+                                   method="repeatedcv",
+                                   number=10,
+                                   repeats=3)
+                               )
+
+save(gbmGrid.0, file="../data/models/gbmTuneGrid0.Rdata")
+save(gbmtune.non_num.nz.g0, file="../data/models/gbmtuneNonNumNZGrid0.Rdata")
+
+rpart.non_num.nz.cvtune.cp <- train(x=cbind(train.num.nz,
+                                        train.non_num),
+                                    y=Y,
+                                    method='rpart',
+                                    trControl = trainControl(
+                                        summaryFunction = twoClassSummary,
+                                        classProbs = TRUE,
+                                        method="repeatedcv",
+                                        number=10,
+                                        repeats=3)
+                                    )
+
+save(rpart.non_num.nz.cvtune.cp,
+     file="../data/models/rpartNonNumNZcvtuneCP.Rdata")
+
+
+```
+
 ## Catgegorical variables
 
 There are not many categorical variables, so we can try a model with
