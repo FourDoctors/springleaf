@@ -1,0 +1,140 @@
+
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(cache=FALSE)
+knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(include=TRUE)
+knitr::opts_chunk$set(results="asis")
+knitr::opts_chunk$set(fig.width=12)
+knitr::opts_chunk$set(fig.height=14)
+prjpath <- "~/work/learn/competitions/kaggle/springleaf/"
+datapath <- paste(prjpath, "data/", sep="")
+analpath <- paste(prjpath, "analysis/", sep="")
+rcodepath <- paste(analpath, "Rcode/", sep="")
+setwd(analpath)
+
+
+```
+
+
+```{r loadLibsAndSource, include=FALSE}
+
+reqdpkgs <- c("lattice", "latticeExtra", "ggplot2", "reshape2",
+              "plyr",  "lubridate", "Hmisc", "corrplot",
+              "rpart", "rpart.plot", "rattle", "RWeka", "rattle",
+              "caret", "gbm", "randomForest")
+lapply(reqdpkgs, library, character.only=TRUE)
+
+```
+
+
+#Introduction
+There are too many variables, especially after we have extracted
+features. Not all of them can reasonably be used in a model. We will
+prune the variable sets by different criteria.
+
+
+```{r prunecorr}
+
+if(!exists("cors.numeric")) {
+    load("../data/corsNumeric.Rdata")
+}
+corThresh <- 0.9
+signcorrd <- lapply(rownames(cors.numeric),
+                    function(x) {
+                        names(which(cors.numeric[x, ] > corThresh))
+                    })
+names(signcorrd) <- rownames(cors.numeric)
+
+```
+
+## Dimensionality reduction
+
+PCA is the hammer of choice, that can be used to reduce the number of
+variables. We can also understand the problem of high-dimensionality
+by cooking some new methods. For example, from the correlations we can
+obtain groups of variables with significant correlations among
+them. Or we can cluster the correlation matrix to obtain hierarchies
+of similar variables. We can make a cut on these, and PCA the
+branches.
+
+High correlation means that the variables are very similar to each
+other. This translates to distance if we subtract the correlation from 1.
+
+```{r corclust}
+
+corclust <- hclust(as.dist(1-cors.numeric), method="ward")
+plot(corclust, labels=FALSE)
+
+```
+
+We can also compute euclidean distances between the correlation
+vectors of the variables. Two variables will be close by this metric
+if their correlations with all the variables are very similar. How
+would the clustering be effected ?
+
+```{r corclusteuc}
+
+corclust.euc <- hclust(dist(cors.numeric), method="ward")
+plot(corclust.euc, labels=FALSE)
+
+```
+
+We will consider the correlation as distance clustering. Cutting the
+clustering tree at 3,
+
+```{r corclustcut}
+
+corclustcut <- cutree(corclust, k = 3)
+table(corclustcut)
+numpreds <- rownames(cors.numeric)
+clusters <- lapply(unique(corclustcut),
+                   function(n) numpreds[ corclustcut==n ]
+                   )
+
+```
+
+###PCA on clusters
+
+```{r pcacluster}
+
+logtrain <- log10( 1 + train[, numpreds])
+logtrain[is.nan(logtrain)] <- 0
+
+c1sd <- sapply(clusters[[1]], function(n) sd(logtrain[, n], na.rm=TRUE))
+c1 <- clusters[[1]][c1sd > 0]
+c1 <- c1[!is.na(c1)]
+
+ltc1 <- as.matrix(logtrain[, c1])
+ltc1[is.nan(ltc1)] <- 0
+
+
+pca1 <- prcomp(~ .,
+               data=as.data.frame(ltc1),
+               center=TRUE , scale=TRUE,
+               na.action='na.omit')
+
+percentVariance1 <- pca1$sd^2/sum(pca1$sd^2)
+
+```
+
+```{r pcatrain}
+
+
+sdtrain <- sapply(numpreds, function(p) sd(train[, p], na.rm=TRUE))
+numpreds.sd1 <- numpreds[sdtrain > 0]
+numpreds.sd1 <- numpreds.sd1[ numpreds.sd1 != 'target']
+train.scale <- scale(train[, numpreds.sd1])
+pcatr <- prcomp( ~ ., data=as.data.frame(train.scale), na.action='na.omit')
+
+train.rotated <- train.scale %*% pcatr$rotation
+
+test.scale <- scale(test[, numpreds.sd1])
+
+test.rotated <- test.scale %*% pcatr$rotation
+
+percentVariance <- pcatr$sd^2/sum(pcatr$sd^2)
+
+```
