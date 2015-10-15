@@ -97,44 +97,254 @@ clusters <- lapply(unique(corclustcut),
 ```
 
 ###PCA on clusters
+Before we can scale the data for pre-processing, we will have to
+remove the zero variance columns. This is sensible. Zero variance
+means that the columns are constant, and hence useless for prediction.
+
+```{r zerovarnumcols}
+
+sd.numpreds <- sapply(numpreds, function(p) sd(train[, p], na.rm=TRUE))
+numpreds.zv <- numpreds[sd.numpreds == 0]
+numpreds.nzv <- numpreds[sd.numpreds != 0]
 
 ```{r pcacluster}
 
-logtrain <- log10( 1 + train[, numpreds])
-logtrain[is.nan(logtrain)] <- 0
 
-c1sd <- sapply(clusters[[1]], function(n) sd(logtrain[, n], na.rm=TRUE))
-c1 <- clusters[[1]][c1sd > 0]
-c1 <- c1[!is.na(c1)]
-
-ltc1 <- as.matrix(logtrain[, c1])
-ltc1[is.nan(ltc1)] <- 0
-
-
-pca1 <- prcomp(~ .,
-               data=as.data.frame(ltc1),
-               center=TRUE , scale=TRUE,
-               na.action='na.omit')
-
-percentVariance1 <- pca1$sd^2/sum(pca1$sd^2)
+processor1 <- preProcess(train[, setdiff(clusters[[1]], numpreds.zv) ],
+                         method=c("YeoJohnson", "center", "scale", "medianImpute", "pca"))
 
 ```
 
-```{r pcatrain}
+###Zero values and error-codes
+As we have discussed else-where the zero values and the error-codes of
+some of the variables do not contain the same information as rest of
+the data. It would make sense to remove the error-codes and the zeros
+before performing a PCA. A column C will be replaced by three:
 
+1. C.nz that contains 0s where C is zero, and 1s elsewhere (including
+where C was NA),
+2. C.ec that contains 1s where C is an error-code, and 0 where not.
+3. C.nu that contains additional NAs where C is either zero or an
+error-code.
 
-sdtrain <- sapply(numpreds, function(p) sd(train[, p], na.rm=TRUE))
-numpreds.sd1 <- numpreds[sdtrain > 0]
-numpreds.sd1 <- numpreds.sd1[ numpreds.sd1 != 'target']
-train.scale <- scale(train[, numpreds.sd1])
-pcatr <- prcomp( ~ ., data=as.data.frame(train.scale), na.action='na.omit')
-
-train.rotated <- train.scale %*% pcatr$rotation
-
-test.scale <- scale(test[, numpreds.sd1])
-
-test.rotated <- test.scale %*% pcatr$rotation
-
-percentVariance <- pcatr$sd^2/sum(pcatr$sd^2)
+```{r zecn}
+nzecnutransformed <- function(xs, ecs, name) {
+    xs.nz <- as.numeric(xs != 0)
+    xs.nz[is.na(xs.nz)] <- 1
+    xs.ec <- as.numeric(xs %in% ecs)
+    xs.ec[is.na(xs.ec)] <- 0
+    xs.nu <- xs
+    xs.nu[ xs %in% ecs] <- NA
+    xs.nu[ xs == 0 ] <- NA
+    df <- data.frame(nu=xs.nu, nz=xs.nz, ec=xs.ec)
+    names(df) <- paste(name, names(df), sep=".")
+    df
+}
 
 ```
+
+We will apply the nzecnu transformation only to cluster X1. The other columns will still go through a BoxCox or YeoJohnson transformation.
+
+
+```{r threeclusters}
+
+if ( !exists("cluents") ) load("../data/cluents.Rdata")
+if ( !exists("eclists") ) load("../data/eclists.Rdata")
+load("../data/train_labeled.Rdata")
+load("../data/test_labeled.Rdata")
+train.and.test <- rbind(train[, -1932], test) # target is at 1932
+N.train <- nrow(train)
+N.test <- nrow(test)
+
+preds.num <- setdiff(cluents$predictor, c("X", "ID"))
+var.preds.num <- sapply(preds.num, function(p) var(train[, p], na.rm=TRUE))
+names(var.preds.num) <- preds.num
+preds.num <- preds.num[ var.preds.num > 0]
+preds.num.X1 <- Filter(function(p) var.preds.num[p] > 0,
+                       with(cluents, predictor[clufp == 1]))
+preds.num.X2 <- Filter(function(p) var.preds.num[p] > 0,
+                       with(cluents, predictor[clufp == 2]))
+preds.num.X3 <- Filter(function(p) var.preds.num[p] > 0,
+                       with(cluents, predictor[clufp == 3]))
+
+train.and.test.X1 <- train.and.test[, preds.num.X1]
+train.and.test.X2 <- train.and.test[, preds.num.X2]
+train.and.test.X3 <- train.and.test[, preds.num.X3]
+
+train.and.test.X1.nzecnu <- do.call(cbind,
+                                    lapply(preds.num.X1,
+                                           function(p) {
+                                               xs <- train.and.test[, p]
+                                               ecs <- eclists[[p]]
+                                               nzecnutransformed(xs, ecs, p)
+                                           })
+                                    )
+
+train.X1.nzecnu <- train.and.test.X1.nzecnu[1:N.train,]
+train.X2 <- train.and.test.X2[1:N.train,]
+train.X3 <- train.and.test.X3[1:N.train,]
+train.X1.nu <- train.X1.nzecnu[, grepl(pattern=".nu", x=names(train.X1.nzecnu), fixed=TRUE)]
+train.X1.ec <- train.X1.nzecnu[, grepl(pattern=".ec", x=names(train.X1.nzecnu), fixed=TRUE)]
+train.X1.nz <- train.X1.nzecnu[, grepl(pattern=".nz", x=names(train.X1.nzecnu), fixed=TRUE)]
+
+test.X1.nzecnu <- train.and.test.X1.nzecnu[N.train + (1:N.test), ]
+test.X2 <- train.and.test.X2[N.train + (1:N.test), ]
+test.X3 <- train.and.test.X3[N.train + (1:N.test), ]
+test.X1.nu <- test.X1.nzecnu[, grepl(pattern=".nu", x=names(test.X1.nzecnu), fixed=TRUE)]
+test.X1.ec <- test.X1.nzecnu[, grepl(pattern=".ec", x=names(test.X1.nzecnu), fixed=TRUE)]
+test.X1.nz <- test.X1.nzecnu[, grepl(pattern=".nz", x=names(test.X1.nzecnu), fixed=TRUE)]
+
+
+
+```
+
+As a result of the *nzecnu* transformation we will get 2 binary
+columns, and one fully numerical. We will preprocess the resulting
+columns along with X1, X2 through caret's *preProcess*,
+
+```{r boxcox1}
+
+bcx.X1.nu <- lapply(names(train.X1.nu),
+                    function(p) {
+                        print(paste("box-cox", p))
+                        BoxCoxTrans(train.X1.nu[, p], na.rm=TRUE)
+                    })
+names(bcx.X1.nu) <- names(train.X1.nu)
+
+train.X1.nu.bcxd <- data.frame(lapply(names(train.X1.nu),
+                                      function(p) predict(bcx.X1.nu[[p]], train.X1.nu[,p])),
+                               stringsAsFactors=FALSE)
+names(train.X1.nu.bcxd) <- paste(names(train.X1.nu), "bc", sep=".")
+
+test.X1.nu.bcxd <- data.frame(lapply(names(test.X1.nu),
+                                      function(p) predict(bcx.X1.nu[[p]], test.X1.nu[,p])),
+                               stringsAsFactors=FALSE)
+names(test.X1.nu.bcxd) <- paste(names(test.X1.nu), "bc", sep=".")
+
+```
+
+```{r boxcox2}
+
+bcx.X2 <- lapply(names(train.X2),
+                 function(p) {
+                     print(paste("box-cox", p))
+                     BoxCoxTrans(train.X2[, p], na.rm=TRUE)
+                 })
+names(bcx.X2) <- names(train.X2)
+
+train.X2.bcxd <- data.frame(lapply(names(train.X2),
+                                   function(p) predict(bcx.X2[[p]], train.X2[,p])),
+                            stringsAsFactors=FALSE)
+names(train.X2.bcxd) <- paste(names(train.X2), "bc", sep=".")
+
+test.X2.bcxd <- data.frame(lapply(names(test.X2),
+                                   function(p) predict(bcx.X2[[p]], test.X2[,p])),
+                            stringsAsFactors=FALSE)
+names(test.X2.bcxd) <- paste(names(test.X2), "bc", sep=".")
+
+```
+BoxCox may lead to zero-variance in some variables. We will remove
+these.
+```{r preprocess}
+
+var.X1.nu.bcxd <- sapply(train.X1.nu.bcxd, function(xs) var(xs, na.rm=TRUE))
+nac.X1.nu.bcxd <- sapply(train.X1.nu.bcxd, function(xs) sum(is.na(xs)))
+
+train.X1.nu.bcxd.varnar <- train.X1.nu.bcxd[, var.X1.nu.bcxd > 1.e-5 &
+                                         nac.X1.nu.bcxd < N.train * 0.735]
+
+test.X1.nu.bcxd.varnar <- test.X1.nu.bcxd[, var.X1.nu.bcxd > 1.e-5 &
+                                         nac.X1.nu.bcxd < N.test * 0.735]
+
+var.X2.bcxd <- sapply(train.X2.bcxd, function(xs) var(xs, na.rm=TRUE))
+nac.X2.bcxd <- sapply(train.X2.bcxd, function(xs) sum(is.na(xs)))
+
+train.X2.bcxd.varnar <- train.X2.bcxd[, var.X2.bcxd > 1.e-5 &
+                                          nac.X2.bcxd < N.train * 1]
+test.X2.bcxd.varnar <- test.X2.bcxd[, var.X2.bcxd > 1.e-5 &
+                                          nac.X2.bcxd < N.test * 1]
+
+
+var.X3 <- sapply(train.X3, function(xs) var(xs, na.rm=TRUE))
+nac.X3 <- sapply(train.X3, function(xs) sum(is.na(xs)))
+
+train.X3.varnar <- train.X3[, var.X3 > 1.e-5 &
+                                nac.X3 < N.train * 1]
+test.X3.varnar <- test.X3[, var.X3 > 1.e-5 &
+                                nac.X3 < N.test * 1]
+
+var.X1.ec <- sapply(train.X1.ec, function(xs) var(xs, na.rm=TRUE))
+nac.X1.ec <- sapply(train.X1.ec, function(xs) sum(is.na(xs)))
+
+train.X1.ec.varnar <- train.X1.ec[ , var.X1.ec > 1.e-5 &
+                                      nac.X1.ec < N.train * 1]
+test.X1.ec.varnar <- test.X1.ec[ , var.X1.ec > 1.e-5 &
+                                    nac.X1.ec < N.test * 1]
+
+var.X1.nz <- sapply(train.X1.nz, function(xs) var(xs, na.rm = TRUE))
+nac.X1.nz <- sapply(train.X1.nz, function(xs) sum(is.na(xs)))
+
+train.X1.nz.varnar <- train.X1.nz[, var.X1.nz > 1.e-5 &
+                                      nac.X1.nz < N.train * 1]
+test.X1.nz.varnar <- test.X1.nz[, var.X1.nz > 1.e-5 &
+                                    nac.X1.nz < N.test * 1]
+
+pp.X1.nu <- preProcess(train.X1.nu.bcxd.varnar,
+                       method=c("center", "scale", "medianImpute", "pca"),
+                       thresh = 0.99)
+pp.X2 <- preProcess(train.X2.bcxd.varnar,
+                    method=c("center", "scale", "medianImpute", "pca"),
+                    thresh = 0.99)
+pp.X3 <- preProcess(train.X3.varnar,
+                    method=c("medianImpute", "pca"),
+                    thresh = 0.99)
+pp.X1.ec <- preProcess(train.X1.ec.varnar,
+                       method=c("medianImpute", "pca"),
+                       thresh = 0.99)
+pp.X1.nz <- preProcess(train.X1.nz.varnar,
+                       method=c("medianImpute", "pca"),
+                       thresh = 0.99)
+
+
+save(pp.X1.nu, file="../data/preprocessed/ppX1nu.Rdata")
+save(pp.X1.ec, file="../data/preprocessed/ppX1ec.Rdata")
+save(pp.X1.nz, file="../data/preprocessed/ppX1nz.Rdata")
+save(pp.X2, file="../data/preprocessed/ppX2.Rdata")
+save(pp.X3, file="../data/preprocessed/ppX1.Rdata")
+
+```
+Now that preprocessing works for the data, we can look directly at PCA
+to see the true dimensionality are in this high-dimensional data. This
+could be tricky if we allow NAs in the data. *prcomp* will remove the
+rows without data, and finally only the rows that have all the columns
+will be used. It turns out there are very few rows that have data in
+each column. Proper PCA will then require imputing. This is what
+*preProcess* does, so we will just use that.
+
+We can use the preProcess objects to generate data, and save
+it. Before we do that we will need to generate the test data, using
+the same transformations as for train.
+
+```{r testransformed}
+
+
+```{r preprocesseddata}
+
+train.X1.nu.pp <- predict(pp.X1.nu, newdata=train.X1.nu.bcxd.varnar)
+train.X1.ec.pp <- predict(pp.X1.ec, newdata=train.X1.ec.varnar)
+train.X1.nz.pp <- predict(pp.X1.nz, newdata=train.X1.nz.varnar)
+train.X2.pp <- predict(pp.X2, newdata=train.X2.bcxd.varnar)
+train.X3.pp<- predict(pp.X3, newdata=train.X3.varnar)
+
+test.X1.nu.pp <- predict(pp.X1.nu, newdata=test.X1.nu.bcxd.varnar)
+test.X1.ec.pp <- predict(pp.X1.ec, newdata=test.X1.ec.varnar)
+test.X1.nz.pp <- predict(pp.X1.nz, newdata=test.X1.nz.varnar)
+test.X2.pp <- predict(pp.X2, newdata=test.X2.bcxd.varnar)
+test.X3.pp<- predict(pp.X3, newdata=test.X3.varnar)
+
+
+```
+
+
+
+

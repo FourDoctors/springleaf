@@ -25,6 +25,21 @@ train.and.test$train.or.test <- c(rep("train", nrow(train)), rep("test", nrow(te
 
 ```
 
+This is what we do to the numerical variables:
+
+1. Numerical variables are grouped into three: X1, X2, X3 based on a
+clustering approach.
+2. X3 are further split into a set of continuous and a set of
+categorical variables.
+3. X1, X2, X3.cons are converted to logscale. 0s and error-codes are
+   set to NA before the log-scale.
+4. X3.cats are converted to discrete categorical variables using a
+lossy information compression.
+5. A non-zero data set is also created for all numerical variables.
+6. An ec data set for  numerical variables that tells us if the values
+   are not ec (nec), and the error-code ( as a string) if it is an
+   error-code.
+
 
 
 ```{r setnumdatatypes}
