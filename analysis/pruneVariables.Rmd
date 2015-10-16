@@ -331,17 +331,46 @@ the same transformations as for train.
 ```{r preprocesseddata}
 
 train.X1.nu.pp <- predict(pp.X1.nu, newdata=train.X1.nu.bcxd.varnar)
+names(train.X1.nu.pp) <- paste("X1.nu.pp", names(train.X1.nu.pp), sep=".")
 train.X1.ec.pp <- predict(pp.X1.ec, newdata=train.X1.ec.varnar)
+names(train.X1.ec.pp) <- paste("X1.ec.pp", names(train.X1.ec.pp), sep=".")
 train.X1.nz.pp <- predict(pp.X1.nz, newdata=train.X1.nz.varnar)
+names(train.X1.nz.pp) <- paste("X1.nz.pp", names(train.X1.nz.pp), sep=".")
 train.X2.pp <- predict(pp.X2, newdata=train.X2.bcxd.varnar)
-train.X3.pp<- predict(pp.X3, newdata=train.X3.varnar)
+names(train.X2.pp) <- paste("X2.pp", names(train.X2.pp), sep=".")
+train.X3.pp <- predict(pp.X3, newdata=train.X3.varnar)
+names(train.X3.pp) <- paste("X3.pp", names(train.X3.pp), sep=".")
+
+
 
 test.X1.nu.pp <- predict(pp.X1.nu, newdata=test.X1.nu.bcxd.varnar)
+names(test.X1.nu.pp) <- paste("X1.nu.pp", names(test.X1.nu.pp), sep=".")
 test.X1.ec.pp <- predict(pp.X1.ec, newdata=test.X1.ec.varnar)
+names(test.X1.ec.pp) <- paste("X1.ec.pp", names(test.X1.ec.pp), sep=".")
 test.X1.nz.pp <- predict(pp.X1.nz, newdata=test.X1.nz.varnar)
+names(test.X1.nz.pp) <- paste("X1.nz.pp", names(test.X1.nz.pp), sep=".")
 test.X2.pp <- predict(pp.X2, newdata=test.X2.bcxd.varnar)
+names(test.X2.pp) <- paste("X2.pp", names(test.X2.pp), sep=".")
 test.X3.pp<- predict(pp.X3, newdata=test.X3.varnar)
+names(test.X3.pp) <- paste("X3.pp", names(test.X3.pp), sep=".")
 
+
+```
+
+
+```{r savetraintest}
+
+save(train.X1.nu.pp, file = "../data/preprocessed/train.X1.nu.pp.Rdata")
+save(train.X1.ec.pp, file = "../data/preprocessed/train.X1.ec.pp.Rdata")
+save(train.X1.nz.pp, file = "../data/preprocessed/train.X1.nz.pp.Rdata")
+save(train.X2.pp, file = "../data/preprocessed/train.X2.pp.Rdata")
+save(train.X3.pp, file = "../data/preprocessed/train.X3.pp.Rdata")
+
+save(test.X1.nu.pp, file = "../data/preprocessed/test.X1.nu.pp.Rdata")
+save(test.X1.ec.pp, file = "../data/preprocessed/test.X1.ec.pp.Rdata")
+save(test.X1.nz.pp, file = "../data/preprocessed/test.X1.nz.pp.Rdata")
+save(test.X2.pp, file = "../data/preprocessed/test.X2.pp.Rdata")
+save(test.X3.pp, file = "../data/preprocessed/test.X3.pp.Rdata")
 
 ```
 

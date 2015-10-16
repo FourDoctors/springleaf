@@ -224,6 +224,53 @@ fit.rpart.non_num.cvtune.cp <- train(x = train.non_num,
 
 ### A GBM model
 
+```{r gbmtrainfunc}
+
+fitgbm <- function(X,Y,
+                   trControl = trainControl(
+                       summaryFunction=twoClassSummary,
+                       classProbs=TRUE,
+                       method="repeatedcv",
+                       number=10,
+                       repeats=3),
+                   grid = expand.grid (
+                       interaction.depth=c(5,7,9),
+                       n.trees=seq(400, 800, by=100),
+                       shrinkage=c(0.01, 0.05, 0.1),
+                       n.minobsinnode=10)
+                   ) {
+    gbmtune <- train(x = X, y = Y,
+                     method="gbm",
+                     metric="ROC",
+                     tuneGrid=grid,
+                     trControl=trControl)
+    gbmtune
+
+}
+
+fitrpart <- function(X, Y,
+                     trControl = trainControl(
+                       summaryFunction=twoClassSummary,
+                       classProbs=TRUE,
+                       method="repeatedcv",
+                       number=10,
+                         repeats=3),
+                     tunelength=10,
+                     cp=TRUE) {
+
+    method <- if (cp) "rpart" else "rpart2"
+    rpartune <- train(x = X, y = Y,
+                      method=method,
+                      tuneLength = tunelength,
+                      metric = "ROC",
+                      trControl = trControl)
+    rpartune
+}
+
+
+```
+
+
 ```{r gbmmodel1}
 
 set.seed(100)
@@ -238,6 +285,7 @@ gbmtune.non_num.nz.g0 <- train(x=cbind(train.num.nz,
                                    train.non_num),
                                y=Y,
                                method='gbm',
+                               metric='ROC',
                                tuneGrid=gbmGrid.0,
                                trControl=trainControl(
                                    summaryFunction=twoClassSummary,
@@ -551,3 +599,57 @@ test.prediction <- data.frame(ID=test$ID, target=predict(fit1, newdata=data.test
 
 
 ```
+
+
+## Using pruned variables
+
+We have created pruned variables, that we will now use for
+predicting. We have also had problems with tuning GBMs. So we will
+also train GBMs directly to debug.
+
+```{r combineprunedvarsforprediction}
+
+##assume the pp data to be loaded.
+train.pp <- cbind(train.X1.nu.pp,
+                  train.X1.nz.pp,
+                  train.X1.ec.pp,
+                  train.X2.pp,
+                  train.X3.pp)
+
+gbmodel <- gbm(target ~ .,
+               data = cbind(train.pp,
+                   data.frame(target=train$target) ),
+               distribution = "bernoulli",
+               interaction.depth = 9,
+               n.trees = 100,
+               shrinkage = 0.01,
+               verbose = TRUE)
+
+save(gbmodel, file="../data/models/gbmodel.pp.depth9.ntrees100.shrinkage01.Rdata")
+
+```
+
+The resuling model had a ROC of 0.7058721. We should compare this to
+an rpart model.
+
+```{r combinepprpart}
+
+control = control=rpart.control(cp=0.001,
+              depth=100, minsplit=10)
+rpart.num.pp <- rpart(target ~ .,
+                      data=cbind(train.pp,
+                          data.frame(target=train$target) ),
+                      control=control
+                      )
+
+save(rpart.num.pp, file="../data/models/rpart.num.pp.Rdata")
+
+```
+
+
+
+
+
+
+
+
