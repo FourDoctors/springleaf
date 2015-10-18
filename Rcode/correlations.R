@@ -33,7 +33,7 @@ df.value.replaced <- function(df, value, replacement=NA) {
     df
 }
 
-noec.df <- df.ec.replaced
+##noec.df <- df.ec.replaced
 
 predictor.values.counts <- function(p, data=train){
     vals <- sort(unique(data[, p]), na.last=TRUE)

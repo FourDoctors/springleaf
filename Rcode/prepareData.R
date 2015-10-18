@@ -54,7 +54,8 @@ train.and.test.num.ec <- data.frame(lapply(preds.num,
                                            )
                                     )
 names(train.and.test.num.ec) <- paste(preds.num, "ec", sep=".")
-save(train.and.test.num.ec, file="../data/trainTest/trainTestNumEC.Rdata")
+save(train.and.test.num.ec,
+     file="../data/trainTest/trainTestNumEC.Rdata")
 
 print("X1ls")
 train.and.test.num.X1.ls <- data.frame(
@@ -68,7 +69,8 @@ train.and.test.num.X1.ls <- data.frame(
     stringsAsFactors = FALSE
     )
 names(train.and.test.num.X1.ls) <- paste(preds.num.X1, 'ls', sep='.')
-save(train.and.test.num.X1.ls, file="../data/trainTest/trainTestNumX1ls.Rdata")
+save(train.and.test.num.X1.ls,
+     file="../data/trainTest/trainTestNumX1ls.Rdata")
 
 print("X2ls")
 train.and.test.num.X2.ls <- data.frame(
@@ -82,7 +84,8 @@ train.and.test.num.X2.ls <- data.frame(
     stringsAsFactors = FALSE
     )
 names(train.and.test.num.X2.ls) <- paste(preds.num.X2, 'ls', sep='.')
-save(train.and.test.num.X2.ls, file="../data/trainTest/trainTestNumX2ls.Rdata")
+save(train.and.test.num.X2.ls,
+     file="../data/trainTest/trainTestNumX2ls.Rdata")
 
 train.and.test.num.X3.ls <- data.frame(
     lapply(preds.num.X3,
@@ -95,7 +98,8 @@ train.and.test.num.X3.ls <- data.frame(
     stringsAsFactors = FALSE
     )
 names(train.and.test.num.X3.ls) <- paste(preds.num.X3, 'ls', sep='.')
-save(train.and.test.num.X3.ls, file="../data/trainTest/trainTestNumX3LS.Rdata")
+save(train.and.test.num.X3.ls,
+     file="../data/trainTest/trainTestNumX3LS.Rdata")
 
 print("X3ls")
 train.and.test.num.X3.cons.ls <- data.frame(
@@ -109,7 +113,8 @@ train.and.test.num.X3.cons.ls <- data.frame(
     stringsAsFactors = FALSE
     )
 names(train.and.test.num.X3.cons.ls) <- paste(preds.num.X3.cons, 'ls', sep='.')
-save(train.and.test.num.X3.cons.ls, file="../data/trainTest/trainTestNumX3consLS.Rdata")
+save(train.and.test.num.X3.cons.ls,
+     file="../data/trainTest/trainTestNumX3consLS.Rdata")
 
 print("X3hc")
 max.loss <- 0.2

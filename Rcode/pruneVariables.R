@@ -115,7 +115,8 @@ preProcess.threeClusters <- function(thresh = 0.95,
     names(bcx.X2) <- names(train.X2)
 
     train.X2.bcxd <- data.frame(lapply(names(train.X2),
-                                       function(p) predict(bcx.X2[[p]], train.X2[,p])),
+                                       function(p) predict(bcx.X2[[p]],
+                                                           train.X2[,p])),
                                 stringsAsFactors=FALSE)
     names(train.X2.bcxd) <- paste(names(train.X2), "bc", sep=".")
 
