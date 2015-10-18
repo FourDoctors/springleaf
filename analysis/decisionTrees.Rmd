@@ -809,8 +809,10 @@ trainAndPredict.xgb <- function(
         paste('maxDepth', max.depth, sep="_"),
         paste('eta', eta, sep="_"),
         sep = ".")
-    filename <- paste("prediction_xgb", paramstring, sep=".")
-    write.csv(subm, file = paste("../data/predictions/", filename, sep="", row.names=FALSE))
+    filename <- paste("../data/predictions/",
+                      paste("prediction_xgb", paramstring, sep="."),
+                      sep="")
+    write.csv(subm, file = paste(filename, "csv", sep="."), row.names=FALSE)
 }
 
 ```
@@ -843,7 +845,7 @@ We can also do CV with xgb,
 
 ```{r xgbcv}
 
-bstDence.cv <- xgb.cv(param = list(max.depth=6, eta=0.01, silent=1,
+bstDence.cv <- xgb.cv(param = list(max.depth=9, eta=0.01, silent=1,
                           nthread=3, objective='binary:logistic'),
                       data=xgb.DMatrix(data.matrix(training),
                           label = train$target[inTraining]),
@@ -879,9 +881,34 @@ We will need to write our own hyper-parameter tuning for xgboost.
 
 ```{r tunexgb}
 
-grid.xgb0 <- expand.grid(max.depth = c(6, 8, 10),
-                         eta = c(0.01, 0.1, 1),
-                         nrounds = c(10, 20, 40) )
+grid.xgb <- expand.grid(max.depth = c(6, 9),
+                         eta = c(0.01, 0.1))
+nrounds = 20
+
+bstDence.tuning <- foreach(n=1:nrow(grid.xgb), .combine = 'rbind') %do% {
+    md <- grid.xgb$max.depth[n]
+    eta <- grid.xgb$eta[n]
+    print(paste("max.depth", md, "eta", eta))
+    bstDence.cv <- xgb.cv(param = list(max.depth = md,
+                              eta = eta,
+                              silent = 1,
+                              nthread=3,
+                              objective = 'binary:logistic'),
+                          data = xgb.DMatrix(data.matrix(training),
+                              label = train$target[inTraining]),
+                          nrounds = nrounds,
+                          nfold = 5,
+                          metrics = {'auc'} )
+    bstDence.cv$nrounds <- 1:nrounds
+    bstDence.cv$max.depth <- md
+    bstDence.cv$eta <- eta
+    bstDence.cv
+}
+
+```
+
+
+
 
 
 
