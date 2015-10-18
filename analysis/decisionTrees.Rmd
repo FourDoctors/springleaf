@@ -648,8 +648,58 @@ save(rpart.num.pp, file="../data/models/rpart.num.pp.Rdata")
 
 
 
+```{r withnonnum}
+
+load("../data/trainTest/trainTestNonNumTreated.Rdata")
+train.non_num <- train.and.test.non_num.treated[1:N.train,]
 
 
+
+test.pp <- cbind(test.X1.nu.pp,
+                 test.X1.nz.pp,
+                 test.X1.ec.pp,
+                 test.X2.pp,
+                 test.X3.pp)
+
+test.non_num <- train.and.test.non_num.treated[N.train + (1:N.test), ]
+train.non_num <- train.non_num[ , sapply(train.non_num,
+                                         function(xs) length(unique(xs[!is.na(xs)])) > 1)]
+
+test.non_num <- test.non_num[ , names(train.non_num)]
+
+
+logvars <- grepl(pattern="logical", x=names(train.non_num))
+train.logical <- data.frame(lapply(train.non_num[, logvars],
+                                   function(xs) as.numeric(xs)))
+train.categorical <- train.non_num[, !logvars]
+
+train.categorical$hasjob <- as.numeric(train.categorical$hasjob)
+
+test.logical <- data.frame(lapply(test.non_num[, logvars],
+                                   function(xs) as.numeric(xs)))
+test.categorical <- test.non_num[, !logvars]
+test.categorical$hasjob <- as.numeric(test.categorical$hasjob)
+
+gbmodel <- gbm(target ~ .,
+               data = cbind(train.pp,
+                   train.logical, train.categorical,
+                   data.frame(target=train$target) ),
+               distribution = "bernoulli",
+               interaction.depth = 9,
+               n.trees = 1000,
+               shrinkage = 0.01,
+               verbose = TRUE)
+
+
+
+test.gbmodel <- predict(gbmodel, n.trees=1000, newdata = cbind(test.pp,
+                                                             test.logical, test.categorical)
+                        )
+
+
+prediction.gbmodel <- data.frame(ID = test$ID, target = test.gbmodel)
+
+```
 
 
 
