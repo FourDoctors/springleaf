@@ -692,14 +692,197 @@ gbmodel <- gbm(target ~ .,
 
 
 
-test.gbmodel <- predict(gbmodel, n.trees=1000, newdata = cbind(test.pp,
-                                                             test.logical, test.categorical)
+test.gbmodel <- predict(gbmodel, n.trees=1000,
+                        newdata = cbind(test.pp,
+                            test.logical, test.categorical),
+                        type="response"
                         )
 
 
 prediction.gbmodel <- data.frame(ID = test$ID, target = test.gbmodel)
+save(prediction.gbmodel, file="../data/predictions/prediction_gbm.num_pp.non_num.Rdata")
+write.csv(prediction.gbmodel,
+          file="../data/predictions/prediction_gbm.num_pp.non_num.csv",
+          row.names=FALSE)
+
+
 
 ```
+
+
+We can use xgboost instead of gbm, claimed to be 10 times faster. To
+make things simpler for us, we will use a script on Kaggle to guide
+the steps needed to prepare data for xgboost. In this script the
+factor variables are converted to integers, and the NAs by -1. Since
+we have already imputed the numerical columns, we will replace NAs for
+only the factors (after these are converted to integers).
+
+
+```{r xgboost}
+
+train.combined <- cbind(train.pp,
+                        train.categorical,
+                        train.logical)
+
+train.combined <- data.frame(lapply(train.combined,
+                                    function(xs) {
+                                        if (class(xs) == 'factor') as.integer(xs)
+                                        else xs
+                                    })
+                             )
+train.combined[is.na(train.combined)] <- -1
+
+clf <- xgboost(data = data.matrix(train.combined),
+               label = train$target,
+               nrounds = 20,
+               objective  = "binary:logistic",
+               eval_metric = "auc")
+
+test.combined <- cbind(test.pp,
+                       test.categorical,
+                       test.logical)
+test.combined <- data.frame(lapply(test.combined,
+                                   function(xs) {
+                                       if(class(xs) == 'factor') as.integer(xs)
+                                       else xs
+                                   })
+                            )
+test.combined[is.na(test.combined)] <- -1
+
+prediction.train <- predict(clf, data.matrix(train.combined))
+cat(roc.auc(prediction.train, train$target), "\n")
+
+
+```
+To characterize the xgboost model better we need to develop a
+cross-validation scheme for it. Since we cannot rely on caret for
+this, we cook our own. Notice that now the data-set *training* will be
+a part of the original train data, as well as *testing* a part of the
+original train data.
+
+```{r cvxgboost}
+set.seed(100)
+inTraining <- createDataPartition(train$target, p = 0.75, list=FALSE)
+training <- train.combined[inTraining, ]
+testing <- train.combined[-inTraining, ]
+
+clf <- xgboost(data = data.matrix(training),
+               label = train$target[inTraining],
+               nrounds = 20,
+               max.depth=10,
+               eta=0.01,
+               objective  = "binary:logistic",
+               eval_metric = "auc")
+prediction.testing <- predict(clf, data.matrix(testing))
+cat("after partitioning train into a training and a testing data set the test AUC",
+    roc.auc(prediction.testing, train$target[-inTraining]), "\n")
+
+
+```
+
+While we used the partitioned training to train and test the model
+above, we should train the model on the complete train set before
+getting predictions on the test.
+
+```{r xgbfinalmodel}
+trainAndPredict.xgb <- function(
+    nrounds = 20,
+    max.depth = 10,
+    eta = 0.01 ) {
+
+    clf <- xgboost(data = data.matrix(train.combined),
+                   label = train$target,
+                   nrounds = nrounds,
+                   max.depth = max.depth,
+                   eta = eta,
+                   objective = "binary:logistic",
+                   eval_metric = "auc")
+
+    prediction.train <- predict(clf, data.matrix(train.combined))
+    prediction.test <- predict(clf, data.matrix(test.combined))
+
+    cat("training AUC", roc.auc(prediction.train, train$target))
+
+    subm <- data.frame( ID = test$ID, target = prediction.test)
+    paramstring <- paste(
+        paste('nrounds', nrounds, sep="_"),
+        paste('maxDepth', max.depth, sep="_"),
+        paste('eta', eta, sep="_"),
+        sep = ".")
+    filename <- paste("prediction_xgb", paramstring, sep=".")
+    write.csv(subm, file = paste("../data/predictions/", filename, sep="", row.names=FALSE))
+}
+
+```
+
+Lets learn to use xgboost from an online tutorial. We will understand
+the relevant parameters, and what they mean.
+
+```{r fromxgboosttut}
+
+bstDense <- xgboost(data = data.matrix(training),
+                    label = train$target[inTraining],
+                    max.depth=2,
+                    eta=0.1,
+                    nthread=3,
+                    nround=100,
+                    objective="binary:logistic",
+                    eval_metric="auc")
+
+
+prediction.testing <- predict(bstDense, data.matrix(testing))
+cat("after partitioning train into a training and a testing data set the test AUC",
+    roc.auc(prediction.testing, train$target[-inTraining]), "\n")
+
+importance_matrix <- xgb.importance(model=bstDense)
+print(importance_matrix)
+
+```
+
+We can also do CV with xgb,
+
+```{r xgbcv}
+
+bstDence.cv <- xgb.cv(param = list(max.depth=6, eta=0.01, silent=1,
+                          nthread=3, objective='binary:logistic'),
+                      data=xgb.DMatrix(data.matrix(training),
+                          label = train$target[inTraining]),
+                      nround = 20,
+                      nfold = 5,
+                      metrics = {'auc'})
+
+```
+
+At the github website of the R xgboost project we have found a caret
+wrapper, that we implement for our data here. We are not sure if we
+can get the tuning metric to be AUC.
+
+```{r xgbcaretwrap}
+
+require(data.table)
+
+df <- data.table(cbind(training,
+                       data.frame(target=train$target[inTraining])),
+                 keep.rownames=FALSE)
+fitControl <- trainControl(method="repeatedcv",
+                           number = 10,
+                           repeats = 3,
+                           search = "random")
+xgbmodel.tuning <- train(factor(target) ~ .,
+                         data = df,
+                         method = "xgbTree",
+                         trControl = fitControl)
+
+```
+
+We will need to write our own hyper-parameter tuning for xgboost.
+
+```{r tunexgb}
+
+grid.xgb0 <- expand.grid(max.depth = c(6, 8, 10),
+                         eta = c(0.01, 0.1, 1),
+                         nrounds = c(10, 20, 40) )
+
 
 
 

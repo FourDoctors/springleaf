@@ -170,19 +170,19 @@ preProcess.threeClusters <- function(thresh = 0.95,
                                         nac.X1.nz < N.test * 1]
 
     pp.X1.nu <- preProcess(train.X1.nu.bcxd.varnar,
-                           method=c("center", "scale", methodImpute, "pca"),
+                           method=c("center", "scale", imputeMethod, "pca"),
                            thresh = thresh)
     pp.X2 <- preProcess(train.X2.bcxd.varnar,
-                        method=c("center", "scale", methodImpute, "pca"),
+                        method=c("center", "scale", imputeMethod, "pca"),
                         thresh = thresh)
     pp.X3 <- preProcess(train.X3.varnar,
-                        method=c(methodImpute, "pca"),
+                        method=c(imputeMethod, "pca"),
                         thresh = thresh)
     pp.X1.ec <- preProcess(train.X1.ec.varnar,
-                           method=c(methodImpute, "pca"),
+                           method=c(imputeMethod, "pca"),
                            thresh = thresh)
     pp.X1.nz <- preProcess(train.X1.nz.varnar,
-                           method=c(methodImpute, "pca"),
+                           method=c(imputeMethod, "pca"),
                            thresh = thresh)
 
     pp.objs <- list(
