@@ -1,5 +1,11 @@
 ##we will use the raw data for xgboost
 ##prepare the data
+##and use independent categories for the factor variables
+
+
+## source among other things
+
+source("../Rcode/indpCats.R")
 
 ##filter parameters
 min.entropy <- 0.25
@@ -44,23 +50,33 @@ print("combine")
 train.xgb <- cbind(train.num,
                    train.categorical,
                    train.logical)
-train.xgb <- data.frame(lapply(train.xgb,
-                               function(xs) {
-                                   if (class(xs) == 'factor') as.integer(xs)
-                                   else xs
-                               })
-                        )
+##make independent categories for categorical variables
+
+cat.vars <- sapply(train.xgb, function(xs) class(xs) == 'factor' | class(xs) == 'character')
+
+train.xgb.cats <- train.xgb[, catvars]
+train.xgb.num <- cbind(train.xgb[, !cat.vars])
+train.xgb.cats <- as.data.frame(
+    do.call(cbind,
+            lapply(names(train.xgb.cats),
+                   function(p) independentCategories(p, train.xgb.cats))
+            )
+    )
+train.xgb <- cbind(train.xgb.num, train.xgb.cats)
 train.xgb[is.na(train.xgb)] <- -99999999999999
 
 test.xgb <- cbind(test.num,
                   test.categorical,
                   test.logical)
-test.xgb <- data.frame(lapply(test.xgb,
-                              function(xs) {
-                                  if (class(xs) == 'factor') as.integer(xs)
-                                  else xs
-                              })
-                       )
+test.xgb.cats <- test.xgb[, catvars]
+test.xgb.num <- cbind(test.xgb[, !cat.vars])
+test.xgb.cats <- as.data.frame(
+    do.call(cbind,
+            lapply(names(test.xgb.cats),
+                   function(p) independentCategories(p, test.xgb.cats))
+            )
+    )
+test.xgb <- cbind(test.xgb.num, test.xgb.cats)
 test.xgb[is.na(test.xgb)] <- -99999999999999
 
 
@@ -70,6 +86,7 @@ constant.filter <- sapply(train.xgb, function(xs) length(unique(xs)) > 1)
 
 train.xgb <- train.xgb[, constant.filter]
 test.xgb <- test.xgb[, constant.filter]
+
 
 entropy.filter <- sapply(train.xgb, function(xs) entropy(xs) > min.entropy)
 
